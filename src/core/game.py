@@ -8,7 +8,9 @@ from core.settings import (
 )
 
 from core.input import InputManager
+from core.camera import Camera
 from entities.player import Player
+from world.world import World
 
 
 class Game:
@@ -27,7 +29,14 @@ class Game:
         self.dt = 0.0
 
         self.input = InputManager()
+
+        self.world = World()
         self.player = Player()
+
+        self.camera = Camera(
+            SCREEN_WIDTH,
+            SCREEN_HEIGHT
+        )
 
         self.font = pygame.font.Font(None, 24)
 
@@ -43,18 +52,35 @@ class Game:
         self.player.update(
             self.input,
             self.dt,
-            self.screen.get_width(),
-            self.screen.get_height()
+            self.world
+        )
+
+        self.camera.update(
+            self.player.rect,
+            self.world.get_width(),
+            self.world.get_height()
         )
 
     def render(self):
         self.screen.fill((20, 20, 25))
 
-        self.player.render(self.screen)
+        self.world.render(
+            self.screen,
+            self.camera
+        )
+
+        self.player.render(
+            self.screen,
+            self.camera
+        )
 
         fps = self.clock.get_fps()
 
-        state = "MOVING" if self.player.is_moving else "IDLE"
+        state = (
+            "MOVING"
+            if self.player.is_moving
+            else "IDLE"
+        )
 
         debug_text = self.font.render(
             f"FPS: {fps:.1f}  "

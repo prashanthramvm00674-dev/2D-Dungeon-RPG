@@ -28,8 +28,7 @@ class Player:
         self,
         input_manager,
         dt,
-        screen_width,
-        screen_height
+        world
     ):
         direction_x = 0
         direction_y = 0
@@ -46,12 +45,10 @@ class Player:
         if input_manager.is_down(pygame.K_s):
             direction_y += 1
 
-        # Check whether player is moving
         self.is_moving = (
             direction_x != 0 or direction_y != 0
         )
 
-        # Update facing direction
         if direction_x < 0:
             self.direction = "left"
         elif direction_x > 0:
@@ -61,7 +58,6 @@ class Player:
         elif direction_y > 0:
             self.direction = "down"
 
-        # Normalize diagonal movement
         if self.is_moving:
             length = math.sqrt(
                 direction_x ** 2 + direction_y ** 2
@@ -70,28 +66,31 @@ class Player:
             direction_x /= length
             direction_y /= length
 
-        self.x += direction_x * self.speed * dt
-        self.y += direction_y * self.speed * dt
+        movement_x = direction_x * self.speed * dt
+        movement_y = direction_y * self.speed * dt
 
-        self.rect.x = int(self.x)
-        self.rect.y = int(self.y)
+        # Horizontal movement
+        new_rect = self.rect.copy()
+        new_rect.x += int(movement_x)
 
-        # Keep player inside screen
-        self.rect.clamp_ip(
-            pygame.Rect(
-                0,
-                0,
-                screen_width,
-                screen_height
-            )
-        )
+        if not world.collides_with_wall(new_rect):
+            self.rect.x = new_rect.x
+
+        # Vertical movement
+        new_rect = self.rect.copy()
+        new_rect.y += int(movement_y)
+
+        if not world.collides_with_wall(new_rect):
+            self.rect.y = new_rect.y
 
         self.x = self.rect.x
         self.y = self.rect.y
 
-    def render(self, screen):
+    def render(self, screen, camera):
+        screen_rect = camera.apply(self.rect)
+
         pygame.draw.rect(
             screen,
             self.color,
-            self.rect
+            screen_rect
         )
