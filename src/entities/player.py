@@ -1,5 +1,6 @@
 import pygame
 import math
+from entities.inventory import Inventory
 
 
 class Player:
@@ -16,6 +17,8 @@ class Player:
 
         self.direction = "down"
         self.is_moving = False
+
+        self.inventory = Inventory(12)
 
         # -------------------------
         # HEALTH
