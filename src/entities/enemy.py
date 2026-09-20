@@ -12,23 +12,39 @@ class Enemy:
 
         self.color = (200, 60, 60)
 
-        # Health
+        # -------------------------
+        # HEALTH
+        # -------------------------
+
         self.max_health = 100
         self.health = self.max_health
 
-        # Movement
+        # -------------------------
+        # MOVEMENT
+        # -------------------------
+
         self.speed = 100
         self.stop_distance = 55
 
-        # Attack
+        # -------------------------
+        # ATTACK
+        # -------------------------
+
         self.attack_range = 60
         self.attack_damage = 10
         self.attack_cooldown = 1.0
         self.attack_timer = 0.0
 
-        # Hit feedback
+        # -------------------------
+        # HIT FLASH
+        # -------------------------
+
         self.hit_flash_timer = 0.0
         self.hit_flash_duration = 0.10
+
+        # -------------------------
+        # RECT
+        # -------------------------
 
         self.rect = pygame.Rect(
             self.x,
@@ -38,18 +54,28 @@ class Enemy:
         )
 
     def update(self, player, dt, world):
+
         if self.is_dead():
             return
 
-        # Hit flash timer
+        # -------------------------
+        # HIT FLASH TIMER
+        # -------------------------
+
         if self.hit_flash_timer > 0:
             self.hit_flash_timer -= dt
 
-        # Attack timer
+        # -------------------------
+        # ATTACK TIMER
+        # -------------------------
+
         if self.attack_timer > 0:
             self.attack_timer -= dt
 
-        # Distance to player
+        # -------------------------
+        # DISTANCE TO PLAYER
+        # -------------------------
+
         dx = (
             player.rect.centerx
             - self.rect.centerx
@@ -64,10 +90,14 @@ class Enemy:
             dx ** 2 + dy ** 2
         )
 
-        # Attack when close
+        # -------------------------
+        # ENEMY ATTACK
+        # -------------------------
+
         if distance <= self.attack_range:
 
             if self.attack_timer <= 0:
+
                 player.take_damage(
                     self.attack_damage
                 )
@@ -78,42 +108,67 @@ class Enemy:
 
             return
 
-        # Stop when close
+        # -------------------------
+        # STOP DISTANCE
+        # -------------------------
+
         if distance <= self.stop_distance:
             return
 
-        # Normalize direction
+        # -------------------------
+        # NORMALIZE DIRECTION
+        # -------------------------
+
         if distance > 0:
             dx /= distance
             dy /= distance
 
-        movement_x = dx * self.speed * dt
-        movement_y = dy * self.speed * dt
+        movement_x = (
+            dx
+            * self.speed
+            * dt
+        )
 
-        # Horizontal movement
+        movement_y = (
+            dy
+            * self.speed
+            * dt
+        )
+
+        # -------------------------
+        # HORIZONTAL MOVEMENT
+        # -------------------------
+
         new_rect = self.rect.copy()
         new_rect.x += int(movement_x)
 
-        if not world.collides_with_wall(new_rect):
+        if not world.collides_with_wall(
+            new_rect
+        ):
             self.rect.x = new_rect.x
 
-        # Vertical movement
+        # -------------------------
+        # VERTICAL MOVEMENT
+        # -------------------------
+
         new_rect = self.rect.copy()
         new_rect.y += int(movement_y)
 
-        if not world.collides_with_wall(new_rect):
+        if not world.collides_with_wall(
+            new_rect
+        ):
             self.rect.y = new_rect.y
 
         self.x = self.rect.x
         self.y = self.rect.y
 
     def take_damage(self, damage):
+
         if self.is_dead():
             return
 
         self.health -= damage
 
-        # Start hit flash
         self.hit_flash_timer = (
             self.hit_flash_duration
         )
@@ -125,11 +180,21 @@ class Enemy:
         return self.health <= 0
 
     def render(self, screen, camera):
-        screen_rect = camera.apply(self.rect)
 
-        # Flash white when hit
+        screen_rect = camera.apply(
+            self.rect
+        )
+
+        # -------------------------
+        # ENEMY BODY
+        # -------------------------
+
         if self.hit_flash_timer > 0:
-            enemy_color = (255, 255, 255)
+            enemy_color = (
+                255,
+                255,
+                255
+            )
         else:
             enemy_color = self.color
 
@@ -139,36 +204,102 @@ class Enemy:
             screen_rect
         )
 
-        # Health bar
-        health_ratio = (
-            self.health / self.max_health
+        # -------------------------
+        # HEALTH BAR
+        # -------------------------
+
+        bar_width = 60
+        bar_height = 8
+
+        bar_x = (
+            screen_rect.centerx
+            - bar_width // 2
         )
 
-        bar_width = self.width
-        bar_height = 6
+        bar_y = (
+            screen_rect.top
+            - 15
+        )
 
+        # Background
         background_rect = pygame.Rect(
-            screen_rect.x,
-            screen_rect.y - 10,
+            bar_x,
+            bar_y,
             bar_width,
             bar_height
         )
 
-        health_rect = pygame.Rect(
-            screen_rect.x,
-            screen_rect.y - 10,
-            int(bar_width * health_ratio),
-            bar_height
-        )
-
         pygame.draw.rect(
             screen,
-            (60, 60, 60),
+            (30, 30, 30),
             background_rect
         )
 
+        # -------------------------
+        # HEALTH RATIO
+        # -------------------------
+
+        health_ratio = (
+            self.health
+            / self.max_health
+        )
+
+        health_width = int(
+            bar_width
+            * health_ratio
+        )
+
+        # -------------------------
+        # HEALTH COLOR
+        # -------------------------
+
+        if health_ratio > 0.60:
+
+            health_color = (
+                50,
+                220,
+                80
+            )
+
+        elif health_ratio > 0.30:
+
+            health_color = (
+                255,
+                210,
+                40
+            )
+
+        else:
+
+            health_color = (
+                240,
+                50,
+                50
+            )
+
+        # Draw health
+        if health_width > 0:
+
+            health_rect = pygame.Rect(
+                bar_x,
+                bar_y,
+                health_width,
+                bar_height
+            )
+
+            pygame.draw.rect(
+                screen,
+                health_color,
+                health_rect
+            )
+
+        # -------------------------
+        # BORDER
+        # -------------------------
+
         pygame.draw.rect(
             screen,
-            (50, 200, 80),
-            health_rect
+            (220, 220, 220),
+            background_rect,
+            1
         )

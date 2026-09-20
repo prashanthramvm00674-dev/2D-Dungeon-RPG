@@ -16,9 +16,13 @@ from entities.enemy import Enemy
 
 from world.world import World
 
+from ui.hud import HUD
+
 
 class Game:
+
     def __init__(self):
+
         pygame.init()
 
         self.screen = pygame.display.set_mode(
@@ -26,29 +30,33 @@ class Game:
             pygame.RESIZABLE
         )
 
-        pygame.display.set_caption(WINDOW_TITLE)
+        pygame.display.set_caption(
+            WINDOW_TITLE
+        )
 
         self.clock = pygame.time.Clock()
+
         self.running = True
+        self.paused = False
         self.dt = 0.0
 
         self.input = InputManager()
 
-        # -------------------------
+        # ==================================================
         # WORLD
-        # -------------------------
+        # ==================================================
 
         self.world = World()
 
-        # -------------------------
+        # ==================================================
         # PLAYER
-        # -------------------------
+        # ==================================================
 
         self.player = Player()
 
-        # -------------------------
+        # ==================================================
         # ENEMIES
-        # -------------------------
+        # ==================================================
 
         self.enemies = [
             Enemy(800, 360),
@@ -57,28 +65,44 @@ class Game:
             Enemy(960, 680),
         ]
 
-        # -------------------------
+        # ==================================================
         # DAMAGE NUMBERS
-        # -------------------------
+        # ==================================================
 
         self.damage_numbers = []
 
-        # -------------------------
+        # ==================================================
         # CAMERA
-        # -------------------------
+        # ==================================================
 
         self.camera = Camera(
             SCREEN_WIDTH,
             SCREEN_HEIGHT
         )
 
-        # -------------------------
+        # ==================================================
+        # HUD
+        # ==================================================
+
+        self.hud = HUD()
+
+        # ==================================================
         # FONTS
-        # -------------------------
+        # ==================================================
 
         self.font = pygame.font.Font(
             None,
             24
+        )
+
+        self.pause_font = pygame.font.Font(
+            None,
+            72
+        )
+
+        self.pause_small_font = pygame.font.Font(
+            None,
+            30
         )
 
         self.game_over_font = pygame.font.Font(
@@ -91,54 +115,73 @@ class Game:
             32
         )
 
+    # ======================================================
+    # EVENTS
+    # ======================================================
+
     def handle_events(self):
+
         for event in pygame.event.get():
 
             if event.type == pygame.QUIT:
+
                 self.running = False
+
+    # ======================================================
+    # UPDATE
+    # ======================================================
 
     def update(self):
 
-        # =========================
+        # ==================================================
         # GAME OVER
-        # =========================
+        # ==================================================
 
         if self.player.is_dead:
 
             if self.input.is_pressed(
-                pygame.K_ESCAPE
-            ):
-                self.running = False
-
-            if self.input.is_pressed(
                 pygame.K_r
             ):
+
                 self.restart()
 
-            # Damage numbers can still finish
-            for damage_number in self.damage_numbers:
-                damage_number.update(self.dt)
+            if self.input.is_pressed(
+                pygame.K_ESCAPE
+            ):
 
-            self.damage_numbers = [
-                damage_number
-                for damage_number in self.damage_numbers
-                if not damage_number.is_finished()
-            ]
+                self.running = False
 
             return
 
-        # =========================
-        # ESCAPE
-        # =========================
+        # ==================================================
+        # PAUSE TOGGLE
+        # ==================================================
 
         if self.input.is_pressed(
             pygame.K_ESCAPE
         ):
-            self.running = False
 
-        # =========================
+            self.paused = not self.paused
+
+            return
+
+        # ==================================================
+        # PAUSED
+        # ==================================================
+
+        if self.paused:
+
+            if self.input.is_pressed(
+                pygame.K_q
+            ):
+
+                self.running = False
+
+            return
+
+        # ==================================================
         # PLAYER
-        # =========================
+        # ==================================================
 
         self.player.update(
             self.input,
@@ -146,9 +189,9 @@ class Game:
             self.world
         )
 
-        # =========================
+        # ==================================================
         # ENEMIES
-        # =========================
+        # ==================================================
 
         for enemy in self.enemies:
 
@@ -158,9 +201,9 @@ class Game:
                 self.world
             )
 
-        # =========================
+        # ==================================================
         # PLAYER ATTACK
-        # =========================
+        # ==================================================
 
         if self.player.is_attacking:
 
@@ -175,13 +218,13 @@ class Game:
                 if self.player.attack_rect.colliderect(
                     enemy.rect
                 ):
+
                     damage = 25
 
                     enemy.take_damage(
                         damage
                     )
 
-                    # Create floating damage number
                     self.damage_numbers.append(
                         DamageNumber(
                             enemy.rect.centerx,
@@ -192,9 +235,9 @@ class Game:
 
                     self.player.attack_has_hit = True
 
-        # =========================
+        # ==================================================
         # DAMAGE NUMBERS
-        # =========================
+        # ==================================================
 
         for damage_number in self.damage_numbers:
 
@@ -208,9 +251,9 @@ class Game:
             if not damage_number.is_finished()
         ]
 
-        # =========================
+        # ==================================================
         # CAMERA
-        # =========================
+        # ==================================================
 
         self.camera.update(
             self.player.rect,
@@ -218,12 +261,14 @@ class Game:
             self.world.get_height()
         )
 
+    # ======================================================
+    # RESTART
+    # ======================================================
+
     def restart(self):
 
-        # Reset player
         self.player = Player()
 
-        # Reset enemies
         self.enemies = [
             Enemy(800, 360),
             Enemy(1040, 360),
@@ -231,38 +276,204 @@ class Game:
             Enemy(960, 680),
         ]
 
-        # Clear damage numbers
         self.damage_numbers = []
 
-        # Reset camera
+        self.paused = False
+
         self.camera.update(
             self.player.rect,
             self.world.get_width(),
             self.world.get_height()
         )
 
+    # ======================================================
+    # PAUSE MENU
+    # ======================================================
+
+    def render_pause_menu(self):
+
+        overlay = pygame.Surface(
+            self.screen.get_size(),
+            pygame.SRCALPHA
+        )
+
+        overlay.fill(
+            (0, 0, 0, 170)
+        )
+
+        self.screen.blit(
+            overlay,
+            (0, 0)
+        )
+
+        center_x = (
+            self.screen.get_width()
+            // 2
+        )
+
+        center_y = (
+            self.screen.get_height()
+            // 2
+        )
+
+        paused_text = self.pause_font.render(
+            "PAUSED",
+            True,
+            (255, 255, 255)
+        )
+
+        self.screen.blit(
+            paused_text,
+            (
+                center_x
+                - paused_text.get_width()
+                // 2,
+                center_y - 100
+            )
+        )
+
+        resume_text = self.pause_small_font.render(
+            "ESC  -  RESUME",
+            True,
+            (120, 220, 120)
+        )
+
+        self.screen.blit(
+            resume_text,
+            (
+                center_x
+                - resume_text.get_width()
+                // 2,
+                center_y
+            )
+        )
+
+        quit_text = self.pause_small_font.render(
+            "Q  -  QUIT",
+            True,
+            (220, 100, 100)
+        )
+
+        self.screen.blit(
+            quit_text,
+            (
+                center_x
+                - quit_text.get_width()
+                // 2,
+                center_y + 45
+            )
+        )
+
+    # ======================================================
+    # GAME OVER MENU
+    # ======================================================
+
+    def render_game_over(self):
+
+        overlay = pygame.Surface(
+            self.screen.get_size(),
+            pygame.SRCALPHA
+        )
+
+        overlay.fill(
+            (0, 0, 0, 180)
+        )
+
+        self.screen.blit(
+            overlay,
+            (0, 0)
+        )
+
+        center_x = (
+            self.screen.get_width()
+            // 2
+        )
+
+        center_y = (
+            self.screen.get_height()
+            // 2
+        )
+
+        game_over_text = (
+            self.game_over_font.render(
+                "GAME OVER",
+                True,
+                (255, 80, 80)
+            )
+        )
+
+        self.screen.blit(
+            game_over_text,
+            (
+                center_x
+                - game_over_text.get_width()
+                // 2,
+                center_y - 70
+            )
+        )
+
+        restart_text = (
+            self.game_over_small_font.render(
+                "R  -  RESTART",
+                True,
+                (255, 255, 255)
+            )
+        )
+
+        self.screen.blit(
+            restart_text,
+            (
+                center_x
+                - restart_text.get_width()
+                // 2,
+                center_y + 20
+            )
+        )
+
+        quit_text = (
+            self.game_over_small_font.render(
+                "ESC  -  QUIT",
+                True,
+                (255, 255, 255)
+            )
+        )
+
+        self.screen.blit(
+            quit_text,
+            (
+                center_x
+                - quit_text.get_width()
+                // 2,
+                center_y + 60
+            )
+        )
+
+    # ======================================================
+    # RENDER
+    # ======================================================
+
     def render(self):
 
-        # =========================
+        # ==================================================
         # BACKGROUND
-        # =========================
+        # ==================================================
 
         self.screen.fill(
             (20, 20, 25)
         )
 
-        # =========================
+        # ==================================================
         # WORLD
-        # =========================
+        # ==================================================
 
         self.world.render(
             self.screen,
             self.camera
         )
 
-        # =========================
+        # ==================================================
         # ENEMIES
-        # =========================
+        # ==================================================
 
         for enemy in self.enemies:
 
@@ -274,18 +485,18 @@ class Game:
                 self.camera
             )
 
-        # =========================
+        # ==================================================
         # PLAYER
-        # =========================
+        # ==================================================
 
         self.player.render(
             self.screen,
             self.camera
         )
 
-        # =========================
+        # ==================================================
         # DAMAGE NUMBERS
-        # =========================
+        # ==================================================
 
         for damage_number in self.damage_numbers:
 
@@ -294,135 +505,41 @@ class Game:
                 self.camera
             )
 
-        # =========================
-        # DEBUG INFORMATION
-        # =========================
+        # ==================================================
+        # HUD
+        # ==================================================
 
-        fps = self.clock.get_fps()
-
-        state = (
-            "MOVING"
-            if self.player.is_moving
-            else "IDLE"
+        self.hud.render(
+            self.screen,
+            self.player,
+            self.enemies
         )
 
-        attack_state = (
-            "ATTACKING"
-            if self.player.is_attacking
-            else "READY"
-        )
+        # ==================================================
+        # PAUSE MENU
+        # ==================================================
 
-        alive_enemies = sum(
-            not enemy.is_dead()
-            for enemy in self.enemies
-        )
+        if self.paused:
 
-        debug_text = self.font.render(
-            f"FPS: {fps:.1f}  "
-            f"DT: {self.dt:.4f}  "
-            f"Direction: {self.player.direction}  "
-            f"State: {state}  "
-            f"Attack: {attack_state}  "
-            f"HP: {self.player.health}  "
-            f"Enemies: {alive_enemies}",
-            True,
-            (255, 255, 255)
-        )
+            self.render_pause_menu()
 
-        self.screen.blit(
-            debug_text,
-            (10, 10)
-        )
-
-        # =========================
-        # GAME OVER SCREEN
-        # =========================
+        # ==================================================
+        # GAME OVER
+        # ==================================================
 
         if self.player.is_dead:
 
-            overlay = pygame.Surface(
-                self.screen.get_size(),
-                pygame.SRCALPHA
-            )
+            self.render_game_over()
 
-            overlay.fill(
-                (0, 0, 0, 170)
-            )
-
-            self.screen.blit(
-                overlay,
-                (0, 0)
-            )
-
-            center_x = (
-                self.screen.get_width()
-                // 2
-            )
-
-            center_y = (
-                self.screen.get_height()
-                // 2
-            )
-
-            game_over_text = (
-                self.game_over_font.render(
-                    "GAME OVER",
-                    True,
-                    (255, 80, 80)
-                )
-            )
-
-            restart_text = (
-                self.game_over_small_font.render(
-                    "Press R to restart",
-                    True,
-                    (255, 255, 255)
-                )
-            )
-
-            quit_text = (
-                self.game_over_small_font.render(
-                    "Press ESC to quit",
-                    True,
-                    (255, 255, 255)
-                )
-            )
-
-            self.screen.blit(
-                game_over_text,
-                (
-                    center_x
-                    - game_over_text.get_width()
-                    // 2,
-                    center_y - 70
-                )
-            )
-
-            self.screen.blit(
-                restart_text,
-                (
-                    center_x
-                    - restart_text.get_width()
-                    // 2,
-                    center_y + 20
-                )
-            )
-
-            self.screen.blit(
-                quit_text,
-                (
-                    center_x
-                    - quit_text.get_width()
-                    // 2,
-                    center_y + 60
-                )
-            )
-
-        # =========================
+        # ==================================================
         # DISPLAY
-        # =========================
+        # ==================================================
 
         pygame.display.flip()
+
+    # ======================================================
+    # MAIN LOOP
+    # ======================================================
 
     def run(self):
 
@@ -434,8 +551,11 @@ class Game:
             )
 
             self.handle_events()
+
             self.input.update()
+
             self.update()
+
             self.render()
 
         pygame.quit()
