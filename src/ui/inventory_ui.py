@@ -24,6 +24,11 @@ class InventoryUI:
             20
         )
 
+        self.button_font = pygame.font.Font(
+            None,
+            22
+        )
+
     # ==================================================
     # TOGGLE
     # ==================================================
@@ -45,6 +50,364 @@ class InventoryUI:
         self.selected_slot = -1
 
     # ==================================================
+    # CHECK EQUIPPED
+    # ==================================================
+
+    def is_equipped(
+        self,
+        item,
+        player
+    ):
+
+        if item is None:
+            return False
+
+        if item.item_type == "weapon":
+
+            return (
+                player.equipped_weapon == item
+            )
+
+        if item.item_type == "armor":
+
+            return (
+                player.equipped_shield == item
+            )
+
+        return False
+
+    # ==================================================
+    # EQUIP / UNEQUIP
+    # ==================================================
+
+    def equip_or_unequip(
+        self,
+        item,
+        player
+    ):
+
+        if item is None:
+            return
+
+        # --------------------------------------------------
+        # WEAPON
+        # --------------------------------------------------
+
+        if item.item_type == "weapon":
+
+            if player.equipped_weapon == item:
+
+                player.unequip_weapon()
+
+            else:
+
+                player.equip_item(
+                    item
+                )
+
+        # --------------------------------------------------
+        # ARMOR / SHIELD
+        # --------------------------------------------------
+
+        elif item.item_type == "armor":
+
+            if player.equipped_shield == item:
+
+                player.unequip_shield()
+
+            else:
+
+                player.equip_item(
+                    item
+                )
+
+    # ==================================================
+    # USE ITEM
+    # ==================================================
+
+    def use_item(
+        self,
+        item,
+        player,
+        inventory
+    ):
+
+        if item is None:
+            return False
+
+        # --------------------------------------------------
+        # HEALTH POTION
+        # --------------------------------------------------
+
+        if item.item_type == "consumable":
+
+            if item.name == "Health Potion":
+
+                if player.health >= player.max_health:
+
+                    return False
+
+                heal_amount = min(
+                    item.value,
+                    player.max_health
+                    - player.health
+                )
+
+                player.health += heal_amount
+
+                inventory.remove_item(
+                    item,
+                    1
+                )
+
+                return True
+
+        return False
+
+    # ==================================================
+    # HANDLE KEY
+    # ==================================================
+
+    def handle_key(
+        self,
+        key,
+        inventory,
+        player
+    ):
+
+        if not self.visible:
+
+            return
+
+        # ==================================================
+        # CLOSE
+        # ==================================================
+
+        if key == pygame.K_i:
+
+            self.close()
+
+            return
+
+        if key == pygame.K_ESCAPE:
+
+            self.close()
+
+            return
+
+        # ==================================================
+        # SELECT NEXT ITEM
+        # ==================================================
+
+        if key == pygame.K_RIGHT:
+
+            self.select_next(
+                inventory
+            )
+
+            return
+
+        # ==================================================
+        # SELECT PREVIOUS ITEM
+        # ==================================================
+
+        if key == pygame.K_LEFT:
+
+            self.select_previous(
+                inventory
+            )
+
+            return
+
+        # ==================================================
+        # SELECT DOWN
+        # ==================================================
+
+        if key == pygame.K_DOWN:
+
+            self.select_down(
+                inventory
+            )
+
+            return
+
+        # ==================================================
+        # SELECT UP
+        # ==================================================
+
+        if key == pygame.K_UP:
+
+            self.select_up(
+                inventory
+            )
+
+            return
+
+        # ==================================================
+        # GET SELECTED ITEM
+        # ==================================================
+
+        if (
+            self.selected_slot < 0
+            or self.selected_slot
+            >= inventory.max_slots
+        ):
+
+            return
+
+        slot = inventory.slots[
+            self.selected_slot
+        ]
+
+        if slot is None:
+
+            return
+
+        item = slot["item"]
+
+        # ==================================================
+        # USE
+        # ==================================================
+
+        if key == pygame.K_u:
+
+            self.use_item(
+                item,
+                player,
+                inventory
+            )
+
+            return
+
+        # ==================================================
+        # EQUIP
+        # ==================================================
+
+        if key == pygame.K_e:
+
+            if (
+                item.item_type == "weapon"
+                or item.item_type == "armor"
+            ):
+
+                self.equip_or_unequip(
+                    item,
+                    player
+                )
+
+    # ==================================================
+    # SELECT NEXT
+    # ==================================================
+
+    def select_next(
+        self,
+        inventory
+    ):
+
+        if inventory.max_slots <= 0:
+
+            return
+
+        if self.selected_slot < 0:
+
+            self.selected_slot = 0
+
+            return
+
+        self.selected_slot += 1
+
+        if (
+            self.selected_slot
+            >= inventory.max_slots
+        ):
+
+            self.selected_slot = 0
+
+    # ==================================================
+    # SELECT PREVIOUS
+    # ==================================================
+
+    def select_previous(
+        self,
+        inventory
+    ):
+
+        if inventory.max_slots <= 0:
+
+            return
+
+        if self.selected_slot < 0:
+
+            self.selected_slot = (
+                inventory.max_slots - 1
+            )
+
+            return
+
+        self.selected_slot -= 1
+
+        if self.selected_slot < 0:
+
+            self.selected_slot = (
+                inventory.max_slots - 1
+            )
+
+    # ==================================================
+    # SELECT DOWN
+    # ==================================================
+
+    def select_down(
+        self,
+        inventory
+    ):
+
+        columns = 4
+
+        if self.selected_slot < 0:
+
+            self.selected_slot = 0
+
+            return
+
+        new_slot = (
+            self.selected_slot
+            + columns
+        )
+
+        if (
+            new_slot
+            < inventory.max_slots
+        ):
+
+            self.selected_slot = new_slot
+
+    # ==================================================
+    # SELECT UP
+    # ==================================================
+
+    def select_up(
+        self,
+        inventory
+    ):
+
+        columns = 4
+
+        if self.selected_slot < 0:
+
+            self.selected_slot = 0
+
+            return
+
+        new_slot = (
+            self.selected_slot
+            - columns
+        )
+
+        if new_slot >= 0:
+
+            self.selected_slot = new_slot
+
+    # ==================================================
     # HANDLE CLICK
     # ==================================================
 
@@ -60,6 +423,10 @@ class InventoryUI:
             return
 
         mouse_x, mouse_y = mouse_position
+
+        # ==================================================
+        # INVENTORY SLOTS
+        # ==================================================
 
         start_x = 220
         start_y = 170
@@ -78,12 +445,14 @@ class InventoryUI:
 
             x = (
                 start_x
-                + column * (slot_size + gap)
+                + column
+                * (slot_size + gap)
             )
 
             y = (
                 start_y
-                + row * (slot_size + gap)
+                + row
+                * (slot_size + gap)
             )
 
             rect = pygame.Rect(
@@ -108,32 +477,73 @@ class InventoryUI:
 
                 item = slot["item"]
 
-                # ==========================================
-                # HEALTH POTION
-                # ==========================================
+                # ==================================================
+                # CONSUMABLE
+                # ==================================================
 
                 if item.item_type == "consumable":
 
-                    if item.name == "Health Potion":
+                    self.use_item(
+                        item,
+                        player,
+                        inventory
+                    )
 
-                        # Don't use potion at full health
-                        if player.health >= player.max_health:
+                # ==================================================
+                # EQUIPMENT
+                # ==================================================
 
-                            return
+                elif (
+                    item.item_type == "weapon"
+                    or item.item_type == "armor"
+                ):
 
-                        heal_amount = min(
-                            item.value,
-                            player.max_health - player.health
-                        )
-
-                        player.health += heal_amount
-
-                        inventory.remove_item(
-                            item,
-                            1
-                        )
+                    self.equip_or_unequip(
+                        item,
+                        player
+                    )
 
                 return
+
+        # ==================================================
+        # EQUIP BUTTON
+        # ==================================================
+
+        button_rect = pygame.Rect(
+            500,
+            500,
+            220,
+            45
+        )
+
+        if button_rect.collidepoint(
+            mouse_x,
+            mouse_y
+        ):
+
+            if (
+                self.selected_slot >= 0
+                and self.selected_slot
+                < inventory.max_slots
+            ):
+
+                slot = inventory.slots[
+                    self.selected_slot
+                ]
+
+                if slot is not None:
+
+                    item = slot["item"]
+
+                    if (
+                        item.item_type == "weapon"
+                        or item.item_type == "armor"
+                    ):
+
+                        self.equip_or_unequip(
+                            item,
+                            player
+                        )
 
     # ==================================================
     # RENDER
@@ -142,7 +552,8 @@ class InventoryUI:
     def render(
         self,
         screen,
-        inventory
+        inventory,
+        player
     ):
 
         if not self.visible:
@@ -231,12 +642,14 @@ class InventoryUI:
 
             x = (
                 start_x
-                + column * (slot_size + gap)
+                + column
+                * (slot_size + gap)
             )
 
             y = (
                 start_y
-                + row * (slot_size + gap)
+                + row
+                * (slot_size + gap)
             )
 
             rect = pygame.Rect(
@@ -247,7 +660,7 @@ class InventoryUI:
             )
 
             # ==================================================
-            # SLOT BACKGROUND
+            # SELECTED
             # ==================================================
 
             if index == self.selected_slot:
@@ -279,45 +692,72 @@ class InventoryUI:
 
             slot = inventory.slots[index]
 
-            if slot is not None:
+            if slot is None:
 
-                item = slot["item"]
+                continue
 
-                quantity = slot["quantity"]
+            item = slot["item"]
 
-                # ------------------------------------------
-                # ITEM NAME
-                # ------------------------------------------
+            quantity = slot["quantity"]
 
-                item_text = self.small_font.render(
-                    item.name,
-                    True,
-                    (255, 255, 255)
+            # ==================================================
+            # ITEM NAME
+            # ==================================================
+
+            item_text = self.small_font.render(
+                item.name,
+                True,
+                (255, 255, 255)
+            )
+
+            screen.blit(
+                item_text,
+                (
+                    x + 5,
+                    y + 8
                 )
+            )
 
-                screen.blit(
-                    item_text,
-                    (
-                        x + 5,
-                        y + 8
+            # ==================================================
+            # QUANTITY
+            # ==================================================
+
+            quantity_text = self.small_font.render(
+                f"x{quantity}",
+                True,
+                (255, 220, 100)
+            )
+
+            screen.blit(
+                quantity_text,
+                (
+                    x + 5,
+                    y + 45
+                )
+            )
+
+            # ==================================================
+            # EQUIPPED
+            # ==================================================
+
+            if self.is_equipped(
+                item,
+                player
+            ):
+
+                equipped_text = (
+                    self.small_font.render(
+                        "EQUIPPED",
+                        True,
+                        (100, 255, 120)
                     )
                 )
 
-                # ------------------------------------------
-                # QUANTITY
-                # ------------------------------------------
-
-                quantity_text = self.small_font.render(
-                    f"x{quantity}",
-                    True,
-                    (255, 220, 100)
-                )
-
                 screen.blit(
-                    quantity_text,
+                    equipped_text,
                     (
-                        x + 5,
-                        y + 45
+                        x + 3,
+                        y - 17
                     )
                 )
 
@@ -325,9 +765,12 @@ class InventoryUI:
         # SELECTED ITEM INFORMATION
         # ==================================================
 
+        selected_item = None
+
         if (
             self.selected_slot >= 0
-            and self.selected_slot < inventory.max_slots
+            and self.selected_slot
+            < inventory.max_slots
         ):
 
             selected = inventory.slots[
@@ -336,28 +779,159 @@ class InventoryUI:
 
             if selected is not None:
 
-                item = selected["item"]
+                selected_item = selected["item"]
 
-                info_text = self.info_font.render(
-                    item.description,
-                    True,
-                    (220, 220, 220)
+        if selected_item is not None:
+
+            # ==================================================
+            # DESCRIPTION
+            # ==================================================
+
+            info_text = self.info_font.render(
+                selected_item.description,
+                True,
+                (220, 220, 220)
+            )
+
+            screen.blit(
+                info_text,
+                (
+                    panel.left + 25,
+                    470
+                )
+            )
+
+            # ==================================================
+            # EQUIPMENT BUTTON
+            # ==================================================
+
+            if (
+                selected_item.item_type == "weapon"
+                or selected_item.item_type == "armor"
+            ):
+
+                if self.is_equipped(
+                    selected_item,
+                    player
+                ):
+
+                    button_text_value = "UNEQUIP"
+
+                else:
+
+                    button_text_value = "EQUIP"
+
+                button_rect = pygame.Rect(
+                    500,
+                    500,
+                    220,
+                    45
+                )
+
+                pygame.draw.rect(
+                    screen,
+                    (65, 85, 100),
+                    button_rect
+                )
+
+                pygame.draw.rect(
+                    screen,
+                    (180, 180, 190),
+                    button_rect,
+                    2
+                )
+
+                button_text = (
+                    self.button_font.render(
+                        button_text_value,
+                        True,
+                        (255, 255, 255)
+                    )
                 )
 
                 screen.blit(
-                    info_text,
+                    button_text,
                     (
-                        panel.left + 25,
-                        510
+                        button_rect.centerx
+                        - button_text.get_width()
+                        // 2,
+                        button_rect.centery
+                        - button_text.get_height()
+                        // 2
+                    )
+                )
+
+            # ==================================================
+            # CONSUMABLE BUTTON
+            # ==================================================
+
+            elif selected_item.item_type == "consumable":
+
+                button_rect = pygame.Rect(
+                    500,
+                    500,
+                    220,
+                    45
+                )
+
+                pygame.draw.rect(
+                    screen,
+                    (65, 100, 75),
+                    button_rect
+                )
+
+                pygame.draw.rect(
+                    screen,
+                    (180, 180, 190),
+                    button_rect,
+                    2
+                )
+
+                button_text = (
+                    self.button_font.render(
+                        "USE  [U]",
+                        True,
+                        (255, 255, 255)
+                    )
+                )
+
+                screen.blit(
+                    button_text,
+                    (
+                        button_rect.centerx
+                        - button_text.get_width()
+                        // 2,
+                        button_rect.centery
+                        - button_text.get_height()
+                        // 2
                     )
                 )
 
         # ==================================================
-        # CLOSE TEXT
+        # CONTROLS
+        # ==================================================
+
+        controls_text = self.small_font.render(
+            "ARROWS SELECT   U USE   E EQUIP",
+            True,
+            (180, 180, 180)
+        )
+
+        screen.blit(
+            controls_text,
+            (
+                panel.centerx
+                - controls_text.get_width() // 2,
+                530
+            )
+        )
+
+        # ==================================================
+        # CLOSE
         # ==================================================
 
         close_text = self.small_font.render(
-            "I - CLOSE",
+            "I / ESC - CLOSE",
             True,
             (200, 200, 200)
         )

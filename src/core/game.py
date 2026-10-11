@@ -13,7 +13,14 @@ from core.damage_number import DamageNumber
 
 from entities.player import Player
 from entities.enemy import Enemy
-from entities.item import HEALTH_POTION
+
+from entities.item import (
+    HEALTH_POTION,
+    IRON_SWORD,
+    SHIELD,
+)
+
+from entities.loot import Loot
 
 from world.world import World
 
@@ -56,10 +63,23 @@ class Game:
 
         self.player = Player()
 
-        # Give player 3 Health Potions
+        # ==================================================
+        # STARTING INVENTORY
+        # ==================================================
+
         self.player.inventory.add_item(
             HEALTH_POTION,
             3
+        )
+
+        self.player.inventory.add_item(
+            IRON_SWORD,
+            1
+        )
+
+        self.player.inventory.add_item(
+            SHIELD,
+            1
         )
 
         # ==================================================
@@ -67,10 +87,10 @@ class Game:
         # ==================================================
 
         self.enemies = [
-            Enemy(800, 360),
-            Enemy(1040, 360),
-            Enemy(600, 520),
-            Enemy(960, 680),
+            Enemy(800, 360, "Goblin"),
+            Enemy(1040, 360, "Skeleton"),
+            Enemy(600, 520, "Orc"),
+            Enemy(960, 680, "Goblin"),
         ]
 
         # ==================================================
@@ -78,6 +98,12 @@ class Game:
         # ==================================================
 
         self.damage_numbers = []
+
+        # ==================================================
+        # LOOT
+        # ==================================================
+
+        self.loot = []
 
         # ==================================================
         # CAMERA
@@ -137,51 +163,97 @@ class Game:
 
         for event in pygame.event.get():
 
-            # ------------------------------------------------
-            # WINDOW CLOSE
-            # ------------------------------------------------
+            # ==================================================
+            # QUIT
+            # ==================================================
 
             if event.type == pygame.QUIT:
 
                 self.running = False
 
-            # ------------------------------------------------
+                continue
+
+            # ==================================================
             # KEYBOARD
-            # ------------------------------------------------
+            # ==================================================
 
             if event.type == pygame.KEYDOWN:
 
+                # ==================================================
+                # GAME OVER
+                # ==================================================
+
+                if self.player.is_dead:
+
+                    if event.key == pygame.K_r:
+
+                        self.restart()
+
+                    elif event.key == pygame.K_ESCAPE:
+
+                        self.running = False
+
+                    continue
+
+                # ==================================================
                 # INVENTORY
-                if event.key == pygame.K_i:
-
-                    if not self.player.is_dead:
-
-                        self.inventory_ui.toggle()
-
-                # ESC
-                if event.key == pygame.K_ESCAPE:
-
-                    if self.inventory_ui.visible:
-
-                        self.inventory_ui.close()
-
-                    elif not self.player.is_dead:
-
-                        self.paused = not self.paused
-
-            # ------------------------------------------------
-            # MOUSE
-            # ------------------------------------------------
-
-            if event.type == pygame.MOUSEBUTTONDOWN:
+                # ==================================================
 
                 if self.inventory_ui.visible:
 
-                    self.inventory_ui.handle_click(
-                        event.pos,
+                    # ------------------------------------------
+                    # ESC CLOSES INVENTORY ONLY
+                    # ------------------------------------------
+
+                    if event.key == pygame.K_ESCAPE:
+
+                        self.inventory_ui.close()
+
+                        continue
+
+                    # ------------------------------------------
+                    # INVENTORY KEYBOARD CONTROLS
+                    # ------------------------------------------
+
+                    self.inventory_ui.handle_key(
+                        event.key,
                         self.player.inventory,
                         self.player
                     )
+
+                    continue
+
+                # ==================================================
+                # INVENTORY TOGGLE
+                # ==================================================
+
+                if event.key == pygame.K_i:
+
+                    if not self.paused:
+
+                        self.inventory_ui.toggle()
+
+                    continue
+
+                # ==================================================
+                # PAUSE / RESUME
+                # ==================================================
+
+                if event.key == pygame.K_ESCAPE:
+
+                    self.paused = not self.paused
+
+                    continue
+
+                # ==================================================
+                # QUIT FROM PAUSE
+                # ==================================================
+
+                if event.key == pygame.K_q:
+
+                    if self.paused:
+
+                        self.running = False
 
     # ======================================================
     # UPDATE
@@ -195,37 +267,13 @@ class Game:
 
         if self.player.is_dead:
 
-            if self.input.is_pressed(
-                pygame.K_r
-            ):
-
-                self.restart()
-
-            if self.input.is_pressed(
-                pygame.K_ESCAPE
-            ):
-
-                self.running = False
-
             return
 
         # ==================================================
-        # INVENTORY OPEN
+        # INVENTORY
         # ==================================================
 
         if self.inventory_ui.visible:
-
-            return
-
-        # ==================================================
-        # PAUSE TOGGLE
-        # ==================================================
-
-        if self.input.is_pressed(
-            pygame.K_ESCAPE
-        ):
-
-            self.paused = not self.paused
 
             return
 
@@ -234,12 +282,6 @@ class Game:
         # ==================================================
 
         if self.paused:
-
-            if self.input.is_pressed(
-                pygame.K_q
-            ):
-
-                self.running = False
 
             return
 
@@ -285,11 +327,47 @@ class Game:
                     enemy.rect
                 ):
 
-                    damage = 25
+                    # ==================================================
+                    # DAMAGE
+                    # ==================================================
+
+                    damage = (
+                        self.player.attack_damage
+                    )
 
                     enemy.take_damage(
                         damage
                     )
+
+                    # ==================================================
+                    # ENEMY DEATH
+                    # ==================================================
+
+                    if enemy.is_dead():
+
+                        # ------------------------------------------
+                        # XP REWARD
+                        # ------------------------------------------
+
+                        self.player.add_xp(
+                            enemy.xp_reward
+                        )
+
+                        # ------------------------------------------
+                        # LOOT DROP
+                        # ------------------------------------------
+
+                        self.loot.append(
+                            Loot(
+                                enemy.rect.centerx - 12,
+                                enemy.rect.centery - 12,
+                                HEALTH_POTION
+                            )
+                        )
+
+                    # ==================================================
+                    # DAMAGE NUMBER
+                    # ==================================================
 
                     self.damage_numbers.append(
                         DamageNumber(
@@ -300,6 +378,27 @@ class Game:
                     )
 
                     self.player.attack_has_hit = True
+
+        # ==================================================
+        # LOOT
+        # ==================================================
+
+        for loot in self.loot:
+
+            loot.update(
+                self.player,
+                self.player.inventory
+            )
+
+        # ==================================================
+        # REMOVE COLLECTED LOOT
+        # ==================================================
+
+        self.loot = [
+            loot
+            for loot in self.loot
+            if not loot.is_collected
+        ]
 
         # ==================================================
         # DAMAGE NUMBERS
@@ -333,26 +432,69 @@ class Game:
 
     def restart(self):
 
+        # ==================================================
+        # NEW PLAYER
+        # ==================================================
+
         self.player = Player()
 
-        # Give new player 3 Health Potions
+        # ==================================================
+        # RESTORE STARTING INVENTORY
+        # ==================================================
+
         self.player.inventory.add_item(
             HEALTH_POTION,
             3
         )
 
+        self.player.inventory.add_item(
+            IRON_SWORD,
+            1
+        )
+
+        self.player.inventory.add_item(
+            SHIELD,
+            1
+        )
+
+        # ==================================================
+        # RESET ENEMIES
+        # ==================================================
+
         self.enemies = [
-            Enemy(800, 360),
-            Enemy(1040, 360),
-            Enemy(600, 520),
-            Enemy(960, 680),
+            Enemy(800, 360, "Goblin"),
+            Enemy(1040, 360, "Skeleton"),
+            Enemy(600, 520, "Orc"),
+            Enemy(960, 680, "Goblin"),
         ]
+
+        # ==================================================
+        # RESET DAMAGE NUMBERS
+        # ==================================================
 
         self.damage_numbers = []
 
+        # ==================================================
+        # RESET LOOT
+        # ==================================================
+
+        self.loot = []
+
+        # ==================================================
+        # RESET PAUSE
+        # ==================================================
+
         self.paused = False
 
+        # ==================================================
+        # CLOSE INVENTORY
+        # ==================================================
+
         self.inventory_ui.close()
+
+        # ==================================================
+        # RESET CAMERA
+        # ==================================================
 
         self.camera.update(
             self.player.rect,
@@ -365,6 +507,10 @@ class Game:
     # ======================================================
 
     def render_pause_menu(self):
+
+        # ==================================================
+        # DARK OVERLAY
+        # ==================================================
 
         overlay = pygame.Surface(
             self.screen.get_size(),
@@ -380,6 +526,10 @@ class Game:
             (0, 0)
         )
 
+        # ==================================================
+        # CENTER
+        # ==================================================
+
         center_x = (
             self.screen.get_width()
             // 2
@@ -390,9 +540,9 @@ class Game:
             // 2
         )
 
-        # --------------------------------------------------
+        # ==================================================
         # PAUSED
-        # --------------------------------------------------
+        # ==================================================
 
         paused_text = self.pause_font.render(
             "PAUSED",
@@ -410,9 +560,9 @@ class Game:
             )
         )
 
-        # --------------------------------------------------
+        # ==================================================
         # RESUME
-        # --------------------------------------------------
+        # ==================================================
 
         resume_text = self.pause_small_font.render(
             "ESC  -  RESUME",
@@ -430,9 +580,9 @@ class Game:
             )
         )
 
-        # --------------------------------------------------
+        # ==================================================
         # QUIT
-        # --------------------------------------------------
+        # ==================================================
 
         quit_text = self.pause_small_font.render(
             "Q  -  QUIT",
@@ -456,6 +606,10 @@ class Game:
 
     def render_game_over(self):
 
+        # ==================================================
+        # DARK OVERLAY
+        # ==================================================
+
         overlay = pygame.Surface(
             self.screen.get_size(),
             pygame.SRCALPHA
@@ -470,6 +624,10 @@ class Game:
             (0, 0)
         )
 
+        # ==================================================
+        # CENTER
+        # ==================================================
+
         center_x = (
             self.screen.get_width()
             // 2
@@ -480,9 +638,9 @@ class Game:
             // 2
         )
 
-        # --------------------------------------------------
+        # ==================================================
         # GAME OVER
-        # --------------------------------------------------
+        # ==================================================
 
         game_over_text = (
             self.game_over_font.render(
@@ -502,9 +660,9 @@ class Game:
             )
         )
 
-        # --------------------------------------------------
+        # ==================================================
         # RESTART
-        # --------------------------------------------------
+        # ==================================================
 
         restart_text = (
             self.game_over_small_font.render(
@@ -524,9 +682,9 @@ class Game:
             )
         )
 
-        # --------------------------------------------------
+        # ==================================================
         # QUIT
-        # --------------------------------------------------
+        # ==================================================
 
         quit_text = (
             self.game_over_small_font.render(
@@ -585,6 +743,17 @@ class Game:
             )
 
         # ==================================================
+        # LOOT
+        # ==================================================
+
+        for loot in self.loot:
+
+            loot.render(
+                self.screen,
+                self.camera
+            )
+
+        # ==================================================
         # PLAYER
         # ==================================================
 
@@ -620,7 +789,8 @@ class Game:
 
         self.inventory_ui.render(
             self.screen,
-            self.player.inventory
+            self.player.inventory,
+            self.player
         )
 
         # ==================================================
@@ -653,17 +823,41 @@ class Game:
 
         while self.running:
 
+            # ==================================================
+            # DELTA TIME
+            # ==================================================
+
             self.dt = (
                 self.clock.tick(FPS)
                 / 1000.0
             )
 
+            # ==================================================
+            # EVENTS
+            # ==================================================
+
             self.handle_events()
+
+            # ==================================================
+            # INPUT
+            # ==================================================
 
             self.input.update()
 
+            # ==================================================
+            # UPDATE
+            # ==================================================
+
             self.update()
 
+            # ==================================================
+            # RENDER
+            # ==================================================
+
             self.render()
+
+        # ==================================================
+        # QUIT
+        # ==================================================
 
         pygame.quit()
