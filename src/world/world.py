@@ -1,5 +1,7 @@
 import pygame
 
+from graphics.dungeon_textures import DungeonTextures
+
 
 class World:
     TILE_SIZE = 40
@@ -34,6 +36,19 @@ class World:
             self.tiles.append(tile_row)
 
         self.create_dungeon()
+
+        # ==================================================
+        # TEXTURES
+        # ==================================================
+
+        self.dungeon_textures = DungeonTextures(seed=731)
+
+        # ==================================================
+        # MOSS PATCHES
+        # ==================================================
+
+        self.moss_patches = []
+        self._generate_moss_patches()
 
     def create_dungeon(self):
         # Clear interior
@@ -118,6 +133,58 @@ class World:
         self.tiles[18][19] = self.FLOOR
         self.tiles[18][20] = self.FLOOR
 
+    def _generate_moss_patches(self):
+        """
+        Generate deterministic moss patch overlays for floor tiles.
+
+        Places moss patches at random floor locations with fixed seeds
+        to ensure consistent visuals across frames.
+        """
+        import random
+
+        rng = random.Random(42)
+
+        # Place several moss patches across the dungeon
+        for i in range(8):
+            # Find a random floor tile position
+            for _ in range(100):
+                row = rng.randint(1, self.rows - 2)
+                column = rng.randint(1, self.columns - 2)
+
+                if self.tiles[row][column] == self.FLOOR:
+                    # Random patch size (2-4 tiles wide, 1-3 tiles tall)
+                    width = rng.randint(2, 4)
+                    height = rng.randint(1, 3)
+
+                    # Ensure patch stays within bounds
+                    if column + width > self.columns - 1:
+                        width = self.columns - 1 - column
+                    if row + height > self.rows - 1:
+                        height = self.rows - 1 - row
+
+                    if width < 1 or height < 1:
+                        continue
+
+                    # Check all tiles in patch are floor
+                    valid = True
+                    for r in range(row, row + height):
+                        for c in range(column, column + width):
+                            if self.tiles[r][c] != self.FLOOR:
+                                valid = False
+                                break
+                        if not valid:
+                            break
+
+                    if valid:
+                        self.moss_patches.append({
+                            'column': column,
+                            'row': row,
+                            'width_tiles': width,
+                            'height_tiles': height,
+                            'seed': i + 100
+                        })
+                        break
+
     def get_width(self):
         return self.columns * self.TILE_SIZE
 
@@ -177,19 +244,41 @@ class World:
                     continue
 
                 if tile == self.WALL:
-                    color = self.wall_color
+                    # Wall tiles use textured stone blocks
+                    # Deterministic variant based on tile position
+                    variant = (row * self.columns + column) % 12
+                    wall_texture = self.dungeon_textures.get_wall_tile(variant)
+
+                    screen.blit(wall_texture, screen_rect)
                 else:
-                    color = self.floor_color
+                    # Floor tiles use detailed stone textures
+                    # Deterministic variant based on tile position
+                    variant = (row * self.columns + column) % 16
+                    floor_texture = self.dungeon_textures.get_floor_tile(variant)
 
-                pygame.draw.rect(
-                    screen,
-                    color,
-                    screen_rect
-                )
+                    screen.blit(floor_texture, screen_rect)
 
-                pygame.draw.rect(
-                    screen,
-                    self.grid_color,
-                    screen_rect,
-                    1
-                )
+        # ==================================================
+        # MOSS PATCH OVERLAYS
+        # ==================================================
+
+        for patch in self.moss_patches:
+            world_x = patch['column'] * self.TILE_SIZE
+            world_y = patch['row'] * self.TILE_SIZE
+            width = patch['width_tiles'] * self.TILE_SIZE
+            height = patch['height_tiles'] * self.TILE_SIZE
+
+            world_rect = pygame.Rect(world_x, world_y, width, height)
+            screen_rect = camera.apply(world_rect)
+
+            # Skip patches outside screen
+            if not screen_rect.colliderect(screen.get_rect()):
+                continue
+
+            moss_texture = self.dungeon_textures.get_moss_patch(
+                patch['width_tiles'],
+                patch['height_tiles'],
+                patch['seed']
+            )
+
+            screen.blit(moss_texture, screen_rect)

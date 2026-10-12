@@ -4,17 +4,12 @@ from pathlib import Path
 
 import pygame
 
-# Make the project root importable when this test is run directly.
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Add the project's src directory to Python's import path.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_DIR = PROJECT_ROOT / "src"
+sys.path.insert(0, str(SRC_DIR))
 
-try:
-    from graphics.pixel_renderer import PixelRenderer
-except ModuleNotFoundError:
-    # Resolve imports when the tests directory is the current working directory.
-    project_root = Path(__file__).resolve().parents[1]
-    if str(project_root) not in sys.path:
-        sys.path.insert(0, str(project_root))
-    from graphics.pixel_renderer import PixelRenderer
+from graphics.pixel_renderer import PixelRenderer
 
 
 def main():
