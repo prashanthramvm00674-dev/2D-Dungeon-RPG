@@ -15,7 +15,7 @@ from world.world import World
 def main():
     pygame.init()
 
-    # Current state after Stage 3
+    # Current state after Stage 4
     SCREEN_WIDTH = 1920
     SCREEN_HEIGHT = 1080
 
@@ -24,13 +24,13 @@ def main():
 
     print(f"Screen: {SCREEN_WIDTH}x{SCREEN_HEIGHT}")
     print(f"World: {world.get_width()}x{world.get_height()}")
-    print(f"World < Screen: {world.get_width() < SCREEN_WIDTH and world.get_height() < SCREEN_HEIGHT}")
+    print(f"World > Screen: {world.get_width() > SCREEN_WIDTH and world.get_height() > SCREEN_HEIGHT}")
 
     # Test 1: Camera with player at various positions
     test_positions = [
-        (320, 180),  # Top-left corner of world
-        (640, 360),  # Player spawn position (center)
-        (1280, 820),  # Bottom-right corner of world
+        (1600, 1000),  # Center of world (player spawn)
+        (200, 200),  # Top-left area
+        (3000, 1800),  # Bottom-right area
     ]
 
     print("\n=== Camera Position Tests ===")
@@ -67,44 +67,35 @@ def main():
 
     print("[PASS] Camera apply method works correctly")
 
-    # Test 3: Camera with larger world (simulating Stage 4)
-    print("\n=== Camera with Larger World (Stage 4 Simulation) ===")
-    larger_world_width = 3200  # 80 tiles × 40px
-    larger_world_height = 2000  # 50 tiles × 40px
+    # Test 3: Camera at world center
+    print("\n=== Camera at World Center ===")
+    center_rect = pygame.Rect(world.get_width() // 2, world.get_height() // 2, 40, 40)
+    camera.update(center_rect, world.get_width(), world.get_height())
 
-    camera.update(player_rect, larger_world_width, larger_world_height)
+    print(f"Player at center: ({world.get_width() // 2}, {world.get_height() // 2})")
+    print(f"Camera at: ({camera.x}, {camera.y})")
 
-    print(f"Larger world: {larger_world_width}x{larger_world_height}")
-    print(f"Player at ({x}, {y}): Camera at ({camera.x}, {camera.y})")
+    # Camera should be off (0,0) when player is at center
+    assert camera.x > 0 or camera.y > 0, "Camera should move from (0,0) with larger world"
 
-    # With larger world, camera should move
-    max_x = max(0, larger_world_width - SCREEN_WIDTH)
-    max_y = max(0, larger_world_height - SCREEN_HEIGHT)
-
-    print(f"Max camera position: ({max_x}, {max_y})")
-
-    # Camera should be able to move within larger world
-    assert max_x > 0, "Max camera x should be > 0 with larger world"
-    assert max_y > 0, "Max camera y should be > 0 with larger world"
-
-    print("[PASS] Camera can move within larger world")
+    print("[PASS] Camera moves from (0,0) when player at center")
 
     # Test 4: Explanation of current behavior
     print("\n=== Current Behavior Analysis ===")
     print(f"Current world size: {world.get_width()}x{world.get_height()}")
     print(f"Current screen size: {SCREEN_WIDTH}x{SCREEN_HEIGHT}")
-    print(f"World fits on screen: {world.get_width() <= SCREEN_WIDTH and world.get_height() <= SCREEN_HEIGHT}")
-    print(f"\nWhen world < viewport:")
+    print(f"World > Screen: {world.get_width() > SCREEN_WIDTH and world.get_height() > SCREEN_HEIGHT}")
+    print(f"\nWhen world > viewport:")
     print(f"  - max_x = max(0, {world.get_width()} - {SCREEN_WIDTH}) = {max(0, world.get_width() - SCREEN_WIDTH)}")
     print(f"  - max_y = max(0, {world.get_height()} - {SCREEN_HEIGHT}) = {max(0, world.get_height() - SCREEN_HEIGHT)}")
-    print(f"  - Camera clamped to (0, 0) to keep entire world visible")
-    print(f"\nThis is CORRECT behavior - the camera should stay at (0, 0)")
-    print(f"when the entire world fits on screen.")
+    print(f"  - Camera can move to follow player within these bounds")
+    print(f"\nThis is CORRECT behavior - the camera follows the player")
+    print(f"when the world is larger than the viewport.")
 
     pygame.quit()
     print("\n=== Camera Behavior Test Complete ===")
     print("Camera is working correctly.")
-    print("No bug found - camera stays at (0, 0) because world < viewport.")
+    print("Camera follows player and clamps to world bounds.")
 
 
 if __name__ == "__main__":

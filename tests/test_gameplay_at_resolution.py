@@ -32,8 +32,8 @@ def main():
 
     # Verify world exists
     assert game.world is not None
-    assert game.world.get_width() == 1600
-    assert game.world.get_height() == 1000
+    assert game.world.get_width() == 3200
+    assert game.world.get_height() == 2000
 
     print(f"[PASS] World loaded: {game.world.get_width()}x{game.world.get_height()}")
 

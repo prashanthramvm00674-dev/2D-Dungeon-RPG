@@ -35,8 +35,8 @@ def main():
 
     # Test World with new resolution
     world = World()
-    assert world.get_width() == 1600, "World width should be 1600 (40 × 40)"
-    assert world.get_height() == 1000, "World height should be 1000 (25 × 40)"
+    assert world.get_width() == 3200, "World width should be 3200 (80 × 40)"
+    assert world.get_height() == 2000, "World height should be 2000 (50 × 40)"
 
     print(f"[PASS] World dimensions: {world.get_width()}x{world.get_height()}")
 

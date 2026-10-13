@@ -10,8 +10,8 @@ class World:
     WALL = 1
 
     def __init__(self):
-        self.columns = 40
-        self.rows = 25
+        self.columns = 80
+        self.rows = 50
 
         self.floor_color = (45, 45, 50)
         self.wall_color = (80, 80, 90)
@@ -50,88 +50,154 @@ class World:
         self.moss_patches = []
         self._generate_moss_patches()
 
+    def get_safe_spawn_position(self):
+        """
+        Find a safe spawn position on a floor tile with clearance from walls.
+
+        Returns (x, y) coordinates for spawning.
+        """
+        import random
+
+        rng = random.Random(999)
+
+        # Try to find a floor tile with clearance
+        for _ in range(1000):
+            row = rng.randint(2, self.rows - 3)
+            column = rng.randint(2, self.columns - 3)
+
+            if self.tiles[row][column] != self.FLOOR:
+                continue
+
+            # Check 3x3 area around tile for walls
+            has_wall_nearby = False
+            for dy in range(-1, 2):
+                for dx in range(-1, 2):
+                    check_row = row + dy
+                    check_col = column + dx
+                    if 0 <= check_col < self.columns and 0 <= check_row < self.rows:
+                        if self.tiles[check_row][check_col] == self.WALL:
+                            has_wall_nearby = True
+                            break
+                if has_wall_nearby:
+                    break
+
+            if not has_wall_nearby:
+                # Return tile center position
+                x = column * self.TILE_SIZE
+                y = row * self.TILE_SIZE
+                return (x, y)
+
+        # Fallback: return first floor tile found
+        for row in range(1, self.rows - 1):
+            for column in range(1, self.columns - 1):
+                if self.tiles[row][column] == self.FLOOR:
+                    x = column * self.TILE_SIZE
+                    y = row * self.TILE_SIZE
+                    return (x, y)
+
+        # Ultimate fallback: return center of map (may be in wall)
+        return (self.get_width() // 2, self.get_height() // 2)
+
     def create_dungeon(self):
+        """
+        Procedurally generate an 80x50 dungeon with connected rooms and corridors.
+
+        Creates a natural, expansive dungeon layout with:
+        - Multiple rooms of varying sizes
+        - Corridors connecting rooms
+        - Deterministic generation for consistent layouts
+        """
+        import random
+
+        rng = random.Random(12345)  # Fixed seed for consistency
+
         # Clear interior
         for row in range(1, self.rows - 1):
             for column in range(1, self.columns - 1):
                 self.tiles[row][column] = self.FLOOR
 
-        # =========================
-        # LEFT ROOM
-        # =========================
+        # Generate rooms
+        rooms = []
+        num_rooms = 12
 
-        for column in range(3, 12):
-            self.tiles[4][column] = self.WALL
+        for _ in range(num_rooms):
+            # Random room size (6-15 tiles wide, 5-12 tiles tall)
+            room_width = rng.randint(6, 15)
+            room_height = rng.randint(5, 12)
 
-        for column in range(3, 12):
-            self.tiles[13][column] = self.WALL
+            # Random position (with padding from edges)
+            room_x = rng.randint(2, self.columns - room_width - 2)
+            room_y = rng.randint(2, self.rows - room_height - 2)
 
-        for row in range(4, 14):
-            self.tiles[row][3] = self.WALL
+            # Create room walls
+            for row in range(room_y, room_y + room_height):
+                self.tiles[row][room_x] = self.WALL
+                self.tiles[row][room_x + room_width - 1] = self.WALL
 
-        # 80px doorway
-        for row in range(4, 8):
-            self.tiles[row][11] = self.WALL
+            for column in range(room_x, room_x + room_width):
+                self.tiles[room_y][column] = self.WALL
+                self.tiles[room_y + room_height - 1][column] = self.WALL
 
-        for row in range(10, 14):
-            self.tiles[row][11] = self.WALL
+            rooms.append({
+                'x': room_x,
+                'y': room_y,
+                'width': room_width,
+                'height': room_height,
+                'center_x': room_x + room_width // 2,
+                'center_y': room_y + room_height // 2
+            })
 
-        # =========================
-        # RIGHT ROOM
-        # =========================
+        # Connect rooms with corridors
+        for i in range(len(rooms) - 1):
+            room1 = rooms[i]
+            room2 = rooms[i + 1]
 
-        for column in range(20, 29):
-            self.tiles[4][column] = self.WALL
+            # Create horizontal corridor
+            start_x = min(room1['center_x'], room2['center_x'])
+            end_x = max(room1['center_x'], room2['center_x'])
+            corridor_y = room1['center_y']
 
-        for column in range(20, 29):
-            self.tiles[13][column] = self.WALL
+            for column in range(start_x, end_x + 1):
+                # Clear corridor (remove walls)
+                if self.tiles[corridor_y][column] == self.WALL:
+                    self.tiles[corridor_y][column] = self.FLOOR
 
-        for row in range(4, 14):
-            self.tiles[row][28] = self.WALL
+            # Create vertical corridor
+            start_y = min(room1['center_y'], room2['center_y'])
+            end_y = max(room1['center_y'], room2['center_y'])
+            corridor_x = room2['center_x']
 
-        # 80px doorway
-        for row in range(4, 8):
-            self.tiles[row][20] = self.WALL
+            for row in range(start_y, end_y + 1):
+                if self.tiles[row][corridor_x] == self.WALL:
+                    self.tiles[row][corridor_x] = self.FLOOR
 
-        for row in range(10, 14):
-            self.tiles[row][20] = self.WALL
+        # Add some additional connecting corridors for more paths
+        for _ in range(4):
+            idx1 = rng.randint(0, len(rooms) - 1)
+            idx2 = rng.randint(0, len(rooms) - 1)
 
-        # =========================
-        # CENTRAL CORRIDOR
-        # =========================
+            if idx1 == idx2:
+                continue
 
-        for column in range(11, 21):
-            self.tiles[7][column] = self.WALL
+            room1 = rooms[idx1]
+            room2 = rooms[idx2]
 
-        for column in range(11, 21):
-            self.tiles[10][column] = self.WALL
+            # Horizontal then vertical corridor
+            start_x = min(room1['center_x'], room2['center_x'])
+            end_x = max(room1['center_x'], room2['center_x'])
+            corridor_y = room1['center_y']
 
-        # 80px openings
-        self.tiles[7][15] = self.FLOOR
-        self.tiles[7][16] = self.FLOOR
+            for column in range(start_x, end_x + 1):
+                if self.tiles[corridor_y][column] == self.WALL:
+                    self.tiles[corridor_y][column] = self.FLOOR
 
-        self.tiles[10][15] = self.FLOOR
-        self.tiles[10][16] = self.FLOOR
+            start_y = min(room1['center_y'], room2['center_y'])
+            end_y = max(room1['center_y'], room2['center_y'])
+            corridor_x = room2['center_x']
 
-        # =========================
-        # LOWER ROOM
-        # =========================
-
-        for column in range(14, 27):
-            self.tiles[18][column] = self.WALL
-
-        for column in range(14, 27):
-            self.tiles[23][column] = self.WALL
-
-        for row in range(18, 24):
-            self.tiles[row][14] = self.WALL
-
-        for row in range(18, 24):
-            self.tiles[row][26] = self.WALL
-
-        # Doorway into lower room
-        self.tiles[18][19] = self.FLOOR
-        self.tiles[18][20] = self.FLOOR
+            for row in range(start_y, end_y + 1):
+                if self.tiles[row][corridor_x] == self.WALL:
+                    self.tiles[row][corridor_x] = self.FLOOR
 
     def _generate_moss_patches(self):
         """
@@ -144,8 +210,8 @@ class World:
 
         rng = random.Random(42)
 
-        # Place several moss patches across the dungeon
-        for i in range(8):
+        # Place moss patches across the expanded dungeon (more patches for larger map)
+        for i in range(20):
             # Find a random floor tile position
             for _ in range(100):
                 row = rng.randint(1, self.rows - 2)

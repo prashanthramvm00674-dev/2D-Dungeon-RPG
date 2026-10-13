@@ -63,6 +63,13 @@ class Game:
 
         self.player = Player()
 
+        # Set safe spawn position after world is generated
+        spawn_x, spawn_y = self.world.get_safe_spawn_position()
+        self.player.x = spawn_x
+        self.player.y = spawn_y
+        self.player.rect.x = spawn_x
+        self.player.rect.y = spawn_y
+
         # ==================================================
         # STARTING INVENTORY
         # ==================================================
@@ -86,12 +93,13 @@ class Game:
         # ENEMIES
         # ==================================================
 
-        self.enemies = [
-            Enemy(800, 360, "Goblin"),
-            Enemy(1040, 360, "Skeleton"),
-            Enemy(600, 520, "Orc"),
-            Enemy(960, 680, "Goblin"),
-        ]
+        # Spawn enemies at safe positions
+        self.enemies = []
+        enemy_types = ["Goblin", "Skeleton", "Orc", "Goblin"]
+
+        for enemy_type in enemy_types:
+            spawn_x, spawn_y = self.world.get_safe_spawn_position()
+            self.enemies.append(Enemy(spawn_x, spawn_y, enemy_type))
 
         # ==================================================
         # DAMAGE NUMBERS
@@ -438,6 +446,13 @@ class Game:
 
         self.player = Player()
 
+        # Set safe spawn position
+        spawn_x, spawn_y = self.world.get_safe_spawn_position()
+        self.player.x = spawn_x
+        self.player.y = spawn_y
+        self.player.rect.x = spawn_x
+        self.player.rect.y = spawn_y
+
         # ==================================================
         # RESTORE STARTING INVENTORY
         # ==================================================
@@ -461,12 +476,13 @@ class Game:
         # RESET ENEMIES
         # ==================================================
 
-        self.enemies = [
-            Enemy(800, 360, "Goblin"),
-            Enemy(1040, 360, "Skeleton"),
-            Enemy(600, 520, "Orc"),
-            Enemy(960, 680, "Goblin"),
-        ]
+        # Spawn enemies at safe positions
+        self.enemies = []
+        enemy_types = ["Goblin", "Skeleton", "Orc", "Goblin"]
+
+        for enemy_type in enemy_types:
+            spawn_x, spawn_y = self.world.get_safe_spawn_position()
+            self.enemies.append(Enemy(spawn_x, spawn_y, enemy_type))
 
         # ==================================================
         # RESET DAMAGE NUMBERS
