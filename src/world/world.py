@@ -8,6 +8,7 @@ class World:
 
     FLOOR = 0
     WALL = 1
+    VOID = 2
 
     def __init__(self):
         self.columns = 80
@@ -246,127 +247,144 @@ class World:
 
     def create_dungeon(self):
         """
-        Procedurally generate an 80x50 dungeon with connected rooms and corridors.
+        Generate enclosed rooms and connected, two-tile-wide corridors.
 
-        Creates a natural, expansive dungeon layout with:
-        - Multiple rooms of varying sizes
-        - Corridors connecting rooms
-        - Deterministic generation for consistent layouts
+        Walkable chambers are FLOOR, their actual masonry boundaries are WALL,
+        and the uncarved space between them is VOID. Keeping these three states
+        separate prevents the entire map from accidentally becoming walkable.
         """
         import random
 
-        rng = random.Random(12345)  # Fixed seed for consistency
+        rng = random.Random(12345)
 
-        # Clear interior
-        for row in range(1, self.rows - 1):
-            for column in range(1, self.columns - 1):
-                self.tiles[row][column] = self.FLOOR
+        # Begin with solid dark rock. Room interiors and corridors are carved
+        # out explicitly, making the dungeon read as distinct chambers.
+        for row in range(self.rows):
+            for column in range(self.columns):
+                if (
+                    row == 0
+                    or row == self.rows - 1
+                    or column == 0
+                    or column == self.columns - 1
+                ):
+                    self.tiles[row][column] = self.WALL
+                else:
+                    self.tiles[row][column] = self.VOID
 
-        # Generate rooms
         rooms = []
-        num_rooms = 12
+        target_room_count = 12
 
-        for _ in range(num_rooms):
-            # Random room size (6-15 tiles wide, 5-12 tiles tall)
-            room_width = rng.randint(6, 15)
-            room_height = rng.randint(5, 12)
+        # Place rooms with a two-tile buffer between their bounding boxes.
+        # The fixed seed makes the layout deterministic between launches.
+        for _ in range(target_room_count):
+            room = None
 
-            # Random position (with padding from edges)
-            room_x = rng.randint(2, self.columns - room_width - 2)
-            room_y = rng.randint(2, self.rows - room_height - 2)
+            for _attempt in range(1000):
+                room_width = rng.randint(7, 14)
+                room_height = rng.randint(6, 11)
+                room_x = rng.randint(2, self.columns - room_width - 2)
+                room_y = rng.randint(2, self.rows - room_height - 2)
 
-            # Create room walls
-            for row in range(room_y, room_y + room_height):
-                self.tiles[row][room_x] = self.WALL
-                self.tiles[row][room_x + room_width - 1] = self.WALL
+                overlaps = any(
+                    not (
+                        room_x + room_width + 2 <= placed["x"]
+                        or placed["x"] + placed["width"] + 2 <= room_x
+                        or room_y + room_height + 2 <= placed["y"]
+                        or placed["y"] + placed["height"] + 2 <= room_y
+                    )
+                    for placed in rooms
+                )
 
-            for column in range(room_x, room_x + room_width):
-                self.tiles[room_y][column] = self.WALL
-                self.tiles[room_y + room_height - 1][column] = self.WALL
+                if not overlaps:
+                    room = {
+                        "x": room_x,
+                        "y": room_y,
+                        "width": room_width,
+                        "height": room_height,
+                        "center_x": room_x + room_width // 2,
+                        "center_y": room_y + room_height // 2,
+                    }
+                    break
 
-            rooms.append({
-                'x': room_x,
-                'y': room_y,
-                'width': room_width,
-                'height': room_height,
-                'center_x': room_x + room_width // 2,
-                'center_y': room_y + room_height // 2
-            })
-
-        # Connect rooms with corridors
-        for i in range(len(rooms) - 1):
-            room1 = rooms[i]
-            room2 = rooms[i + 1]
-
-            # Create horizontal corridor
-            start_x = min(room1['center_x'], room2['center_x'])
-            end_x = max(room1['center_x'], room2['center_x'])
-            corridor_y = room1['center_y']
-
-            # Carve two adjacent floor lanes so the corridor and every
-            # doorway it crosses are at least 2 gameplay tiles (80 px) wide.
-            for column in range(start_x, end_x + 1):
-                for corridor_row in (corridor_y, corridor_y + 1):
-                    if (
-                        0 < corridor_row < self.rows - 1
-                        and self.tiles[corridor_row][column] == self.WALL
-                    ):
-                        self.tiles[corridor_row][column] = self.FLOOR
-
-            # Create vertical corridor
-            start_y = min(room1['center_y'], room2['center_y'])
-            end_y = max(room1['center_y'], room2['center_y'])
-            corridor_x = room2['center_x']
-
-            # The vertical leg is also 2 tiles wide. Clearing a pair of
-            # columns opens broad doorways through horizontal chamber walls.
-            for row in range(start_y, end_y + 1):
-                for corridor_column in (corridor_x, corridor_x + 1):
-                    if (
-                        0 < corridor_column < self.columns - 1
-                        and self.tiles[row][corridor_column] == self.WALL
-                    ):
-                        self.tiles[row][corridor_column] = self.FLOOR
-
-        # Add some additional connecting corridors for more paths
-        for _ in range(4):
-            idx1 = rng.randint(0, len(rooms) - 1)
-            idx2 = rng.randint(0, len(rooms) - 1)
-
-            if idx1 == idx2:
+            # Preserve a valid dungeon if an unusually constrained map cannot
+            # fit every requested room.
+            if room is None:
                 continue
 
-            room1 = rooms[idx1]
-            room2 = rooms[idx2]
+            left = room["x"]
+            top = room["y"]
+            right = left + room["width"] - 1
+            bottom = top + room["height"] - 1
 
-            # Horizontal then vertical corridor
-            start_x = min(room1['center_x'], room2['center_x'])
-            end_x = max(room1['center_x'], room2['center_x'])
-            corridor_y = room1['center_y']
+            for row in range(top, bottom + 1):
+                for column in range(left, right + 1):
+                    is_boundary = (
+                        row == top
+                        or row == bottom
+                        or column == left
+                        or column == right
+                    )
+                    self.tiles[row][column] = (
+                        self.WALL if is_boundary else self.FLOOR
+                    )
 
-            # Carve two adjacent floor lanes so the corridor and every
-            # doorway it crosses are at least 2 gameplay tiles (80 px) wide.
-            for column in range(start_x, end_x + 1):
-                for corridor_row in (corridor_y, corridor_y + 1):
+            rooms.append(room)
+
+        def carve_horizontal(start_x, end_x, row):
+            """Carve an 80-pixel-wide horizontal leg and its door openings."""
+            for column in range(min(start_x, end_x), max(start_x, end_x) + 1):
+                for corridor_row in (row, row + 1):
                     if (
-                        0 < corridor_row < self.rows - 1
-                        and self.tiles[corridor_row][column] == self.WALL
+                        0 < column < self.columns - 1
+                        and 0 < corridor_row < self.rows - 1
                     ):
                         self.tiles[corridor_row][column] = self.FLOOR
 
-            start_y = min(room1['center_y'], room2['center_y'])
-            end_y = max(room1['center_y'], room2['center_y'])
-            corridor_x = room2['center_x']
-
-            # The vertical leg is also 2 tiles wide. Clearing a pair of
-            # columns opens broad doorways through horizontal chamber walls.
-            for row in range(start_y, end_y + 1):
-                for corridor_column in (corridor_x, corridor_x + 1):
+        def carve_vertical(column, start_y, end_y):
+            """Carve an 80-pixel-wide vertical leg and its door openings."""
+            for row in range(min(start_y, end_y), max(start_y, end_y) + 1):
+                for corridor_column in (column, column + 1):
                     if (
                         0 < corridor_column < self.columns - 1
-                        and self.tiles[row][corridor_column] == self.WALL
+                        and 0 < row < self.rows - 1
                     ):
                         self.tiles[row][corridor_column] = self.FLOOR
+
+        def connect_rooms(first, second):
+            # Horizontal then vertical creates a continuous L-shaped route.
+            carve_horizontal(
+                first["center_x"],
+                second["center_x"],
+                first["center_y"],
+            )
+            carve_vertical(
+                second["center_x"],
+                first["center_y"],
+                second["center_y"],
+            )
+
+        # A spanning chain guarantees every generated room has a route to the
+        # rest of the dungeon, even if extra connections are skipped.
+        for index in range(len(rooms) - 1):
+            connect_rooms(rooms[index], rooms[index + 1])
+
+        # Add deterministic alternate routes so exploration is less linear.
+        extra_links = set()
+        for _ in range(4):
+            if len(rooms) < 2:
+                break
+
+            first_index = rng.randrange(len(rooms))
+            second_index = rng.randrange(len(rooms) - 1)
+            if second_index >= first_index:
+                second_index += 1
+
+            pair = tuple(sorted((first_index, second_index)))
+            if pair in extra_links:
+                continue
+
+            extra_links.add(pair)
+            connect_rooms(rooms[first_index], rooms[second_index])
 
     def _generate_moss_patches(self):
         """
@@ -565,7 +583,8 @@ class World:
         ):
             return True
 
-        return self.tiles[row][column] == self.WALL
+        # Any uncarved tile is solid; only explicitly carved floor is walkable.
+        return self.tiles[row][column] != self.FLOOR
 
     def collides_with_wall(self, rect):
         left = rect.left // self.TILE_SIZE
@@ -628,6 +647,40 @@ class World:
                 ]
                 screen.blit(texture, screen_region.topleft)
 
+        # Work out the visible tile range once. Reuse it for the void mask and
+        # wall pass so larger maps do not process off-screen cells every frame.
+        first_column = max(0, camera.x // self.TILE_SIZE)
+        last_column = min(
+            self.columns,
+            (camera.x + screen.get_width()) // self.TILE_SIZE + 2
+        )
+        first_row = max(0, camera.y // self.TILE_SIZE)
+        last_row = min(
+            self.rows,
+            (camera.y + screen.get_height()) // self.TILE_SIZE + 2
+        )
+
+        # Mask uncarved space with near-black rock shadow. The macro flagstone
+        # texture remains visible only in rooms and corridors that are FLOOR.
+        for row in range(first_row, last_row):
+            for column in range(first_column, last_column):
+                if self.tiles[row][column] != self.VOID:
+                    continue
+
+                world_rect = pygame.Rect(
+                    column * self.TILE_SIZE,
+                    row * self.TILE_SIZE,
+                    self.TILE_SIZE,
+                    self.TILE_SIZE
+                )
+                screen_rect = camera.apply(world_rect)
+                shade = (
+                    3 + (row * 3 + column) % 3,
+                    6 + (row + column * 2) % 4,
+                    10 + (row * 5 + column * 3) % 5
+                )
+                screen.fill(shade, screen_rect)
+
         # ==================================================
         # EXISTING MOSS PATCH OVERLAYS
         # ==================================================
@@ -665,17 +718,6 @@ class World:
         # Preserve 40x40 wall geometry, but only inspect tiles that can
         # appear in this viewport. The old full-map scan visited all 4,000
         # cells every frame, even when most of the dungeon was off-screen.
-        first_column = max(0, camera.x // self.TILE_SIZE)
-        last_column = min(
-            self.columns,
-            (camera.x + screen.get_width()) // self.TILE_SIZE + 2
-        )
-        first_row = max(0, camera.y // self.TILE_SIZE)
-        last_row = min(
-            self.rows,
-            (camera.y + screen.get_height()) // self.TILE_SIZE + 2
-        )
-
         for row in range(first_row, last_row):
             for column in range(first_column, last_column):
                 if self.tiles[row][column] != self.WALL:
