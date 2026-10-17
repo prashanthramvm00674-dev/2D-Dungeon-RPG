@@ -50,6 +50,8 @@ def main():
 
     lighting = LightingSystem()
     lighting.render(screen, world.torches, player, camera)
+    world.render_torches(screen, camera)
+    enemy.render_health_bar(screen, camera)
 
     hud = HUD()
     hud.render(screen, player, [enemy])
