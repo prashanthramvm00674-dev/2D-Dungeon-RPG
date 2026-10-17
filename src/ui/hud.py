@@ -210,6 +210,9 @@ class HUD:
             pygame.draw.lines(
                 screen, (255, 112, 92), False, points[1:6], 1
             )
+        pygame.draw.lines(
+            screen, (116, 73, 59), True, points, 1
+        )
 
     def _draw_menu_button(self, screen, rect):
         mouse_pos = pygame.mouse.get_pos()
@@ -232,8 +235,9 @@ class HUD:
 
     def _draw_xp_bar(self, screen, rect, player, scale):
         self._frame(screen, rect)
-        inner = rect.inflate(-14 * scale, -14 * scale)
-        inner.height = max(8 * scale, inner.height)
+        inset = max(5, int(14 * scale))
+        inner = rect.inflate(-inset, -inset)
+        inner.height = max(max(5, int(8 * scale)), inner.height)
         inner.centery = rect.centery
         pygame.draw.rect(screen, (4, 8, 12), inner)
 
@@ -272,8 +276,8 @@ class HUD:
         # --------------------------------------------------
         # TOP LEFT: WAVE / ENEMY COUNT / EMBLEM
         # --------------------------------------------------
-        left_x = u(24)
-        top_y = u(23)
+        left_x = u(32)
+        top_y = u(25)
         badge_rect = pygame.Rect(left_x, top_y, u(82), u(78))
         info_rect = pygame.Rect(
             left_x + u(57), top_y + u(2), u(246), u(74)
@@ -332,14 +336,14 @@ class HUD:
             center_x + u(56), top_y + u(3), u(220), u(60)
         )
         self._draw_rune_badge(screen, rune_badge)
-        self._draw_xp_bar(screen, xp_panel, player, u(1))
+        self._draw_xp_bar(screen, xp_panel, player, scale)
 
         # --------------------------------------------------
         # TOP RIGHT: INVENTORY / MENU BUTTON
         # --------------------------------------------------
         menu_size = u(70)
         self.menu_button_rect = pygame.Rect(
-            width - u(24) - menu_size,
+            width - u(42) - menu_size,
             top_y,
             menu_size,
             menu_size
@@ -354,7 +358,7 @@ class HUD:
         slot_count = 5
         total_width = slot_count * slot_size + (slot_count - 1) * slot_gap
         first_x = (width - total_width) // 2
-        slot_y = height - u(87)
+        slot_y = height - u(110)
 
         for index in range(slot_count):
             slot_rect = pygame.Rect(
