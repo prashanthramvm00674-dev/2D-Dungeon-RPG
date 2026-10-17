@@ -303,19 +303,30 @@ class World:
             end_x = max(room1['center_x'], room2['center_x'])
             corridor_y = room1['center_y']
 
+            # Carve two adjacent floor lanes so the corridor and every
+            # doorway it crosses are at least 2 gameplay tiles (80 px) wide.
             for column in range(start_x, end_x + 1):
-                # Clear corridor (remove walls)
-                if self.tiles[corridor_y][column] == self.WALL:
-                    self.tiles[corridor_y][column] = self.FLOOR
+                for corridor_row in (corridor_y, corridor_y + 1):
+                    if (
+                        0 < corridor_row < self.rows - 1
+                        and self.tiles[corridor_row][column] == self.WALL
+                    ):
+                        self.tiles[corridor_row][column] = self.FLOOR
 
             # Create vertical corridor
             start_y = min(room1['center_y'], room2['center_y'])
             end_y = max(room1['center_y'], room2['center_y'])
             corridor_x = room2['center_x']
 
+            # The vertical leg is also 2 tiles wide. Clearing a pair of
+            # columns opens broad doorways through horizontal chamber walls.
             for row in range(start_y, end_y + 1):
-                if self.tiles[row][corridor_x] == self.WALL:
-                    self.tiles[row][corridor_x] = self.FLOOR
+                for corridor_column in (corridor_x, corridor_x + 1):
+                    if (
+                        0 < corridor_column < self.columns - 1
+                        and self.tiles[row][corridor_column] == self.WALL
+                    ):
+                        self.tiles[row][corridor_column] = self.FLOOR
 
         # Add some additional connecting corridors for more paths
         for _ in range(4):
@@ -333,17 +344,29 @@ class World:
             end_x = max(room1['center_x'], room2['center_x'])
             corridor_y = room1['center_y']
 
+            # Carve two adjacent floor lanes so the corridor and every
+            # doorway it crosses are at least 2 gameplay tiles (80 px) wide.
             for column in range(start_x, end_x + 1):
-                if self.tiles[corridor_y][column] == self.WALL:
-                    self.tiles[corridor_y][column] = self.FLOOR
+                for corridor_row in (corridor_y, corridor_y + 1):
+                    if (
+                        0 < corridor_row < self.rows - 1
+                        and self.tiles[corridor_row][column] == self.WALL
+                    ):
+                        self.tiles[corridor_row][column] = self.FLOOR
 
             start_y = min(room1['center_y'], room2['center_y'])
             end_y = max(room1['center_y'], room2['center_y'])
             corridor_x = room2['center_x']
 
+            # The vertical leg is also 2 tiles wide. Clearing a pair of
+            # columns opens broad doorways through horizontal chamber walls.
             for row in range(start_y, end_y + 1):
-                if self.tiles[row][corridor_x] == self.WALL:
-                    self.tiles[row][corridor_x] = self.FLOOR
+                for corridor_column in (corridor_x, corridor_x + 1):
+                    if (
+                        0 < corridor_column < self.columns - 1
+                        and self.tiles[row][corridor_column] == self.WALL
+                    ):
+                        self.tiles[row][corridor_column] = self.FLOOR
 
     def _generate_moss_patches(self):
         """
@@ -639,10 +662,22 @@ class World:
         # WALLS ON TOP OF THE FLOOR
         # ==================================================
 
-        # Preserve the 40x40 logical wall geometry. Only wall tiles are drawn
-        # here; their visual and collision size remain unchanged.
-        for row in range(self.rows):
-            for column in range(self.columns):
+        # Preserve 40x40 wall geometry, but only inspect tiles that can
+        # appear in this viewport. The old full-map scan visited all 4,000
+        # cells every frame, even when most of the dungeon was off-screen.
+        first_column = max(0, camera.x // self.TILE_SIZE)
+        last_column = min(
+            self.columns,
+            (camera.x + screen.get_width()) // self.TILE_SIZE + 2
+        )
+        first_row = max(0, camera.y // self.TILE_SIZE)
+        last_row = min(
+            self.rows,
+            (camera.y + screen.get_height()) // self.TILE_SIZE + 2
+        )
+
+        for row in range(first_row, last_row):
+            for column in range(first_column, last_column):
                 if self.tiles[row][column] != self.WALL:
                     continue
 
