@@ -764,6 +764,20 @@ class Game:
     def render(self):
 
         # ==================================================
+        # CAMERA SYNC
+        # ==================================================
+
+        # Recalculate from the live player rect and current viewport immediately
+        # before drawing. This prevents stale camera offsets from being used by
+        # world tiles, entities, loot, and damage numbers in this frame.
+        self.camera.update(
+            self.player.rect,
+            self.world.get_width(),
+            self.world.get_height(),
+            *self.screen.get_size()
+        )
+
+        # ==================================================
         # BACKGROUND
         # ==================================================
 
