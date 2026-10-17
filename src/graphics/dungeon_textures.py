@@ -40,6 +40,7 @@ class DungeonTextures:
     def __init__(self, seed=731):
         self.seed = int(seed)
         self.floor_tiles = {}
+        self.floor_region_cache = {}
         self.wall_tiles = {}
         self.moss_patch_cache = {}
 
@@ -62,6 +63,237 @@ class DungeonTextures:
             self.floor_tiles[variant] = self._create_floor_tile(variant)
 
         return self.floor_tiles[variant]
+
+    def get_floor_region(self, width=960, height=720, seed=1927):
+        """Return a cached large-scale flagstone floor texture region."""
+        key = (int(width), int(height), int(seed))
+        if key not in self.floor_region_cache:
+            self.floor_region_cache[key] = self._create_floor_region(*key)
+        return self.floor_region_cache[key]
+
+    def _create_floor_region(self, width, height, seed):
+        """
+        Generate a large flagstone region inspired by the supplied reference:
+        broad blue-gray slabs, deep joints, chipped bevels, cracks, and moss.
+        This is visual-only; world tiles remain 40x40 for collision.
+        """
+        rng = random.Random(self.seed + seed * 3571)
+        width = max(160, int(width))
+        height = max(160, int(height))
+
+        mortar = (15, 23, 30)
+        mortar_highlight = (23, 34, 42)
+        stone_palette = (
+            (35, 50, 62),
+            (39, 54, 67),
+            (43, 58, 71),
+            (46, 62, 75),
+            (49, 64, 76),
+            (40, 55, 68),
+            (52, 66, 78),
+        )
+        shade = (24, 36, 46)
+        bevel_light = (76, 91, 103)
+        bevel_mid = (61, 77, 90)
+        fleck_palette = (
+            (27, 40, 51),
+            (56, 72, 84),
+            (68, 82, 93),
+            (81, 94, 103),
+        )
+
+        surface = pygame.Surface((width, height))
+        surface.fill(mortar)
+
+        # Recessed seams sit beneath each slab for depth.
+        pygame.draw.line(
+            surface, mortar_highlight, (0, 0), (width - 1, 0), 2
+        )
+        pygame.draw.line(
+            surface, (9, 15, 21), (0, height - 1), (width - 1, height - 1), 3
+        )
+
+        y = -rng.randint(0, 30)
+        row_index = 0
+        while y < height + 120:
+            row_height = rng.randint(66, 112)
+            seam = rng.randint(5, 9)
+            x = -rng.randint(25, 85) if row_index % 2 else -rng.randint(0, 45)
+
+            while x < width + 120:
+                block_width = rng.randint(76, 158)
+                left = x + seam // 2
+                top = y + seam // 2
+                right = x + block_width - seam // 2
+                bottom = y + row_height - seam // 2
+
+                if right <= left + 18 or bottom <= top + 18:
+                    x += block_width
+                    continue
+
+                # Irregular corners and small chips make the slabs less uniform.
+                cut_tl = rng.randint(4, 13)
+                cut_tr = rng.randint(4, 15)
+                cut_br = rng.randint(4, 14)
+                cut_bl = rng.randint(4, 16)
+                points = [
+                    (left + cut_tl, top + rng.randint(0, 4)),
+                    (left + int((right - left) * rng.uniform(0.34, 0.52)), top),
+                    (right - cut_tr, top + rng.randint(0, 5)),
+                    (right, top + rng.randint(5, 14)),
+                    (right - rng.randint(0, 4), bottom - cut_br),
+                    (right - rng.randint(10, 25), bottom),
+                    (left + rng.randint(16, 35), bottom - rng.randint(0, 3)),
+                    (left + cut_bl, bottom),
+                    (left, bottom - rng.randint(8, 20)),
+                    (left + rng.randint(0, 4), top + rng.randint(14, 28)),
+                ]
+
+                # Shadow underneath the slab.
+                shadow_points = [
+                    (px + 2, py + 3) for px, py in points
+                ]
+                pygame.draw.polygon(surface, (7, 13, 19), shadow_points)
+                pygame.draw.polygon(surface, shade, points)
+
+                base = rng.choice(stone_palette)
+                face_points = [
+                    (px, py - 2 if py > top else py + 1)
+                    for px, py in points
+                ]
+                pygame.draw.polygon(surface, base, face_points)
+
+                # Subtle uneven mineral planes across each broad face.
+                for _ in range(rng.randint(3, 7)):
+                    fx = rng.randint(left + 8, max(left + 8, right - 18))
+                    fy = rng.randint(top + 8, max(top + 8, bottom - 14))
+                    fw = rng.randint(10, min(34, max(10, right - fx)))
+                    fh = rng.randint(5, min(20, max(5, bottom - fy)))
+                    facet = [
+                        (fx, fy + rng.randint(1, 5)),
+                        (fx + fw // 2, fy),
+                        (fx + fw, fy + rng.randint(1, 6)),
+                        (fx + fw - rng.randint(2, 8), fy + fh),
+                        (fx + rng.randint(2, 8), fy + fh - rng.randint(0, 3)),
+                    ]
+                    pygame.draw.polygon(
+                        surface,
+                        rng.choice(((30, 44, 55), (48, 63, 76), (57, 72, 84))),
+                        facet
+                    )
+
+                # Broken top and left bevel highlights; darker lower/right edges.
+                pygame.draw.lines(
+                    surface,
+                    bevel_light,
+                    False,
+                    points[:3],
+                    2
+                )
+                pygame.draw.lines(
+                    surface,
+                    bevel_mid,
+                    False,
+                    points[7:10],
+                    1
+                )
+                pygame.draw.lines(
+                    surface,
+                    (19, 29, 38),
+                    False,
+                    points[3:7],
+                    2
+                )
+
+                inner_left = max(0, left + 8)
+                inner_right = min(width - 1, right - 8)
+                inner_top = max(0, top + 8)
+                inner_bottom = min(height - 1, bottom - 8)
+
+                # Grain clusters and small mineral chips.
+                for _ in range(rng.randint(45, 95)):
+                    px = rng.randint(inner_left, max(inner_left, inner_right))
+                    py = rng.randint(inner_top, max(inner_top, inner_bottom))
+                    color = rng.choice(fleck_palette)
+                    size = rng.choices((1, 2, 3), weights=(5, 4, 1), k=1)[0]
+                    pygame.draw.rect(surface, color, (px, py, size, size))
+
+                # Main fissure with a few angular turns and a tiny branch.
+                if rng.random() < 0.78 and inner_right - inner_left > 24:
+                    cx = rng.randint(inner_left + 8, max(inner_left + 8, inner_right - 8))
+                    cy = rng.randint(inner_top + 8, max(inner_top + 8, inner_bottom - 8))
+                    direction = rng.choice((-1, 1))
+                    length = rng.randint(12, 29)
+                    crack = [
+                        (cx, cy),
+                        (cx + direction * 3, cy + 4),
+                        (cx + direction * 1, cy + 8),
+                        (cx + direction * 5, cy + 12),
+                        (cx + direction * 4, cy + length),
+                    ]
+                    pygame.draw.lines(surface, (24, 36, 46), False, crack, 2)
+                    pygame.draw.lines(surface, (59, 73, 83), False, crack[:3], 1)
+                    if rng.random() < 0.45:
+                        bx, by = crack[2]
+                        pygame.draw.lines(
+                            surface,
+                            (25, 38, 47),
+                            False,
+                            [(bx, by), (bx - direction * 5, by + 3), (bx - direction * 9, by + 8)],
+                            1
+                        )
+
+                x += block_width
+            y += row_height
+            row_index += 1
+
+        # Moss grows in organic clusters along a few seams instead of evenly
+        # tinting every tile. The same deterministic seed keeps it stable.
+        moss_clusters = max(5, width * height // 90000)
+        moss_colors = (
+            (24, 43, 26),
+            (34, 55, 30),
+            (46, 68, 34),
+            (59, 82, 39),
+            (76, 96, 45),
+        )
+        for _ in range(moss_clusters):
+            cx = rng.randint(0, width - 1)
+            cy = rng.randint(0, height - 1)
+            angle = rng.uniform(-0.8, 0.8)
+            span = rng.randint(30, 105)
+            branch_points = []
+            for step in range(7):
+                t = step / 6
+                px = self._clamp(
+                    int(cx + (t - 0.5) * span),
+                    0,
+                    width - 1
+                )
+                py = self._clamp(
+                    int(cy + (t - 0.5) * span * angle + rng.randint(-5, 5)),
+                    0,
+                    height - 1
+                )
+                branch_points.append((px, py))
+
+            pygame.draw.lines(surface, (18, 32, 20), False, branch_points, 5)
+            pygame.draw.lines(surface, (35, 54, 28), False, branch_points, 3)
+
+            for px, py in branch_points:
+                for _ in range(rng.randint(5, 13)):
+                    leaf_x = px + rng.randint(-11, 11)
+                    leaf_y = py + rng.randint(-7, 7)
+                    leaf_w = rng.choice((1, 2, 3, 4))
+                    leaf_h = rng.choice((1, 2, 3))
+                    color = rng.choice(moss_colors)
+                    pygame.draw.rect(
+                        surface,
+                        color,
+                        (leaf_x, leaf_y, leaf_w, leaf_h)
+                    )
+
+        return surface
 
     def get_wall_tile(self, variant=0):
         """Return a cached 40x40 wall texture."""
