@@ -550,81 +550,168 @@ class Player:
     # RENDER
     # ======================================================
 
-    def render(
-        self,
-        screen,
-        camera
-    ):
-
+    def render(self, screen, camera):
+        """Draw a compact, original pixel-art adventurer instead of a flat block."""
         screen_rect = camera.apply(self.rect)
+        x, y = screen_rect.x, screen_rect.y
+        cx = screen_rect.centerx
+        bottom = screen_rect.bottom
 
-        # ==================================================
-        # PLAYER COLOR
-        # ==================================================
+        # Soft grounding shadow keeps the character connected to the flagstones.
+        shadow = pygame.Surface((52, 16), pygame.SRCALPHA)
+        pygame.draw.ellipse(shadow, (0, 0, 0, 125), (2, 2, 48, 11))
+        screen.blit(shadow, (cx - 26, bottom - 10))
 
-        if self.hit_flash_timer > 0:
-            player_color = (255, 255, 255)
-        else:
-            player_color = self.color
+        flash = self.hit_flash_timer > 0
+        outline = (13, 19, 27)
+        armor_dark = (22, 52, 92) if not flash else (170, 190, 205)
+        armor = (38, 102, 177) if not flash else (250, 250, 245)
+        armor_light = (86, 174, 236) if not flash else (255, 255, 255)
+        steel = (189, 211, 222)
+        leather = (95, 55, 33)
+        gold = (224, 157, 59)
 
-        pygame.draw.rect(
-            screen,
-            player_color,
-            screen_rect
+        # Boots and split greaves.
+        pygame.draw.rect(screen, outline, (x + 8, y + 29, 11, 9))
+        pygame.draw.rect(screen, outline, (x + 21, y + 29, 11, 9))
+        pygame.draw.rect(screen, (39, 48, 62), (x + 9, y + 30, 9, 7))
+        pygame.draw.rect(screen, (39, 48, 62), (x + 22, y + 30, 9, 7))
+        pygame.draw.rect(screen, (12, 17, 23), (x + 7, y + 36, 13, 4))
+        pygame.draw.rect(screen, (12, 17, 23), (x + 21, y + 36, 13, 4))
+        pygame.draw.line(screen, (98, 126, 147), (x + 10, y + 31), (x + 17, y + 31), 1)
+        pygame.draw.line(screen, (98, 126, 147), (x + 23, y + 31), (x + 30, y + 31), 1)
+
+        # Arms sit behind the chest plate.
+        pygame.draw.polygon(
+            screen, outline,
+            [(x + 10, y + 15), (x + 5, y + 19), (x + 7, y + 28),
+             (x + 12, y + 29), (x + 15, y + 22)]
+        )
+        pygame.draw.polygon(
+            screen, (64, 91, 125),
+            [(x + 10, y + 16), (x + 7, y + 20), (x + 9, y + 26),
+             (x + 12, y + 25), (x + 14, y + 20)]
+        )
+        pygame.draw.polygon(
+            screen, outline,
+            [(x + 29, y + 15), (x + 34, y + 18), (x + 33, y + 27),
+             (x + 28, y + 29), (x + 25, y + 22)]
+        )
+        pygame.draw.polygon(
+            screen, (64, 91, 125),
+            [(x + 29, y + 16), (x + 32, y + 19), (x + 31, y + 25),
+             (x + 28, y + 26), (x + 26, y + 21)]
         )
 
-        # ==================================================
-        # ATTACK HITBOX
-        # ==================================================
+        # Chest silhouette, raised blue plates, and small brass rivets.
+        torso = [
+            (x + 11, y + 15), (x + 16, y + 13), (x + 24, y + 13),
+            (x + 29, y + 16), (x + 27, y + 28), (x + 23, y + 31),
+            (x + 16, y + 30), (x + 12, y + 27)
+        ]
+        pygame.draw.polygon(screen, outline, torso)
+        pygame.draw.polygon(
+            screen, armor_dark,
+            [(x + 13, y + 16), (x + 17, y + 15), (x + 23, y + 15),
+             (x + 27, y + 17), (x + 25, y + 27), (x + 22, y + 29),
+             (x + 16, y + 28), (x + 14, y + 25)]
+        )
+        pygame.draw.polygon(
+            screen, armor,
+            [(x + 15, y + 17), (x + 20, y + 16), (x + 25, y + 18),
+             (x + 23, y + 25), (x + 17, y + 25)]
+        )
+        pygame.draw.line(screen, armor_light, (x + 16, y + 17), (x + 20, y + 16), 2)
+        pygame.draw.line(screen, (28, 69, 113), (x + 19, y + 19), (x + 18, y + 25), 2)
+        pygame.draw.rect(screen, gold, (x + 19, y + 27, 5, 4))
+        pygame.draw.rect(screen, (62, 39, 24), (x + 14, y + 28, 13, 3))
+        pygame.draw.rect(screen, (255, 210, 91), (x + 20, y + 27, 3, 3))
 
+        # Shoulder guards give the silhouette a readable fantasy-armour shape.
+        pygame.draw.polygon(
+            screen, outline,
+            [(x + 9, y + 14), (x + 13, y + 12), (x + 17, y + 16),
+             (x + 14, y + 21), (x + 10, y + 19)]
+        )
+        pygame.draw.polygon(
+            screen, (48, 91, 138),
+            [(x + 10, y + 15), (x + 13, y + 14), (x + 15, y + 17),
+             (x + 13, y + 19), (x + 11, y + 18)]
+        )
+        pygame.draw.polygon(
+            screen, outline,
+            [(x + 25, y + 16), (x + 29, y + 12), (x + 33, y + 15),
+             (x + 32, y + 19), (x + 28, y + 21)]
+        )
+        pygame.draw.polygon(
+            screen, (48, 91, 138),
+            [(x + 27, y + 16), (x + 29, y + 14), (x + 31, y + 16),
+             (x + 30, y + 18), (x + 28, y + 19)]
+        )
+
+        # Helmet: dark rim, bright crown, visor slit, and central crest.
+        helmet = [
+            (x + 12, y + 11), (x + 13, y + 5), (x + 17, y + 2),
+            (x + 24, y + 2), (x + 28, y + 6), (x + 29, y + 12),
+            (x + 25, y + 17), (x + 16, y + 17)
+        ]
+        pygame.draw.polygon(screen, outline, helmet)
+        pygame.draw.polygon(
+            screen, (22, 83, 145),
+            [(x + 14, y + 10), (x + 15, y + 6), (x + 18, y + 4),
+             (x + 23, y + 4), (x + 26, y + 7), (x + 27, y + 11),
+             (x + 24, y + 15), (x + 17, y + 15)]
+        )
+        pygame.draw.line(screen, (93, 185, 245), (x + 16, y + 6), (x + 20, y + 4), 2)
+        pygame.draw.polygon(
+            screen, (10, 19, 30),
+            [(x + 15, y + 10), (x + 26, y + 10), (x + 25, y + 13),
+             (x + 17, y + 13)]
+        )
+        pygame.draw.line(screen, gold, (x + 18, y + 12), (x + 24, y + 12), 1)
+        pygame.draw.line(screen, armor_light, (x + 20, y + 3), (x + 20, y + 7), 2)
+        pygame.draw.rect(screen, gold, (x + 20, y + 7, 2, 3))
+
+        # Blade orientation follows the last movement direction. The weapon
+        # extends beyond the body silhouette, like the supplied gameplay aim.
+        weapon_points = {
+            "right": ((x + 30, y + 23), (x + 39, y + 10)),
+            "left": ((x + 10, y + 23), (x + 1, y + 10)),
+            "up": ((x + 25, y + 13), (x + 34, y + 3)),
+            "down": ((x + 27, y + 27), (x + 36, y + 37)),
+        }
+        start, tip = weapon_points.get(self.direction, weapon_points["right"])
+        pygame.draw.line(screen, outline, start, tip, 5)
+        pygame.draw.line(screen, leather, start, tip, 3)
+        blade_start = (
+            int(start[0] + (tip[0] - start[0]) * 0.34),
+            int(start[1] + (tip[1] - start[1]) * 0.34),
+        )
+        pygame.draw.line(screen, outline, blade_start, tip, 4)
+        pygame.draw.line(screen, steel, blade_start, tip, 2)
+        pygame.draw.line(
+            screen, (243, 249, 245),
+            (blade_start[0], blade_start[1] - 1),
+            (tip[0], tip[1] - 1), 1
+        )
+        pygame.draw.line(
+            screen, gold,
+            (int(start[0] - 2), int(start[1] + 2)),
+            (int(start[0] + 2), int(start[1] - 2)), 3
+        )
+
+        # Attacks use a quick glowing slash, not a solid debug hitbox.
         if self.is_attacking:
-
-            attack_screen_rect = camera.apply(
-                self.attack_rect
+            slash = pygame.Rect(x - 7, y - 8, 54, 54)
+            arc_angles = {
+                "right": (4.0, 2.1),
+                "left": (0.9, 5.2),
+                "up": (5.1, 3.6),
+                "down": (2.1, 0.4),
+            }
+            start_angle, stop_angle = arc_angles.get(self.direction, (4.0, 2.1))
+            pygame.draw.arc(screen, (66, 150, 232), slash, start_angle, stop_angle, 3)
+            pygame.draw.arc(
+                screen, (220, 244, 255),
+                slash.inflate(-6, -6), start_angle, stop_angle, 1
             )
-
-            pygame.draw.rect(
-                screen,
-                (255, 80, 80),
-                attack_screen_rect
-            )
-
-        # ==================================================
-        # HEALTH BAR
-        # ==================================================
-
-        bar_width = 100
-        bar_height = 8
-
-        health_ratio = max(
-            0.0,
-            min(1.0, self.health / self.max_health)
-            if self.max_health > 0
-            else 0.0
-        )
-
-        background_rect = pygame.Rect(
-            screen_rect.centerx - bar_width // 2,
-            screen_rect.top - 20,
-            bar_width,
-            bar_height
-        )
-
-        health_rect = pygame.Rect(
-            screen_rect.centerx - bar_width // 2,
-            screen_rect.top - 20,
-            int(bar_width * health_ratio),
-            bar_height
-        )
-
-        pygame.draw.rect(
-            screen,
-            (60, 60, 60),
-            background_rect
-        )
-
-        pygame.draw.rect(
-            screen,
-            (50, 200, 80),
-            health_rect
-        )
