@@ -251,17 +251,23 @@ class Game:
             # ==================================================
 
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if (
-                    event.button == 1
-                    and self.inventory_ui.visible
-                    and not self.player.is_dead
-                ):
-                    self.inventory_ui.handle_click(
-                        event.pos,
-                        self.player.inventory,
-                        self.player,
-                        self.screen.get_size()
-                    )
+                if event.button == 1 and not self.player.is_dead:
+                    # The target-style top-right menu button toggles inventory.
+                    # Check it first so the same button can close the overlay.
+                    if (
+                        not self.paused
+                        and self.hud.menu_button_contains(event.pos)
+                    ):
+                        self.inventory_ui.toggle()
+                        continue
+
+                    if self.inventory_ui.visible:
+                        self.inventory_ui.handle_click(
+                            event.pos,
+                            self.player.inventory,
+                            self.player,
+                            self.screen.get_size()
+                        )
 
                 continue
 
