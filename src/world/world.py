@@ -586,6 +586,66 @@ class World:
         # Any uncarved tile is solid; only explicitly carved floor is walkable.
         return self.tiles[row][column] != self.FLOOR
 
+    def find_path(self, start_tile, goal_tile):
+        """
+        Return a shortest four-direction path across carved FLOOR tiles.
+
+        The result contains both start and goal tiles. Walls and uncarved VOID
+        cells are never traversable, so enemies can follow the actual corridors
+        instead of repeatedly pushing against chamber walls.
+        """
+        from collections import deque
+
+        start = (int(start_tile[0]), int(start_tile[1]))
+        goal = (int(goal_tile[0]), int(goal_tile[1]))
+
+        for column, row in (start, goal):
+            if (
+                column < 0 or column >= self.columns
+                or row < 0 or row >= self.rows
+                or self.tiles[row][column] != self.FLOOR
+            ):
+                return []
+
+        if start == goal:
+            return [start]
+
+        frontier = deque([start])
+        previous = {start: None}
+        directions = ((1, 0), (-1, 0), (0, 1), (0, -1))
+
+        while frontier:
+            current = frontier.popleft()
+            if current == goal:
+                break
+
+            for dx, dy in directions:
+                neighbour = (current[0] + dx, current[1] + dy)
+                column, row = neighbour
+
+                if (
+                    neighbour in previous
+                    or column < 0 or column >= self.columns
+                    or row < 0 or row >= self.rows
+                    or self.tiles[row][column] != self.FLOOR
+                ):
+                    continue
+
+                previous[neighbour] = current
+                frontier.append(neighbour)
+
+        if goal not in previous:
+            return []
+
+        path = []
+        node = goal
+        while node is not None:
+            path.append(node)
+            node = previous[node]
+
+        path.reverse()
+        return path
+
     def collides_with_wall(self, rect):
         left = rect.left // self.TILE_SIZE
         right = (rect.right - 1) // self.TILE_SIZE
