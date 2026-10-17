@@ -34,8 +34,31 @@ class Game:
 
         pygame.init()
 
+        # Size the initial window to fit the available desktop. The game's
+        # logical world is larger than the viewport, so the camera must use
+        # the actual visible display-surface size rather than an off-screen
+        # 1920x1080 surface on a smaller monitor.
+        display_info = pygame.display.Info()
+        desktop_width = display_info.current_w or SCREEN_WIDTH
+        desktop_height = display_info.current_h or SCREEN_HEIGHT
+
+        available_width = max(640, desktop_width - 40)
+        available_height = max(480, desktop_height - 100)
+        aspect_ratio = SCREEN_WIDTH / SCREEN_HEIGHT
+
+        window_width = min(
+            SCREEN_WIDTH,
+            available_width,
+            int(available_height * aspect_ratio)
+        )
+        window_height = min(
+            SCREEN_HEIGHT,
+            available_height,
+            int(window_width / aspect_ratio)
+        )
+
         self.screen = pygame.display.set_mode(
-            (SCREEN_WIDTH, SCREEN_HEIGHT),
+            (window_width, window_height),
             pygame.RESIZABLE
         )
 
@@ -126,8 +149,7 @@ class Game:
         # ==================================================
 
         self.camera = Camera(
-            SCREEN_WIDTH,
-            SCREEN_HEIGHT
+            *self.screen.get_size()
         )
 
         # ==================================================
@@ -187,6 +209,30 @@ class Game:
 
                 self.running = False
 
+                continue
+
+            # ==================================================
+            # WINDOW RESIZE
+            # ==================================================
+
+            if event.type == pygame.VIDEORESIZE:
+                # Recreate the display surface at the real client size.
+                # This keeps Pygame drawing bounds and the camera viewport
+                # synchronized when the user resizes the window.
+                new_width = max(640, int(event.w))
+                new_height = max(480, int(event.h))
+
+                self.screen = pygame.display.set_mode(
+                    (new_width, new_height),
+                    pygame.RESIZABLE
+                )
+
+                self.camera.update(
+                    self.player.rect,
+                    self.world.get_width(),
+                    self.world.get_height(),
+                    *self.screen.get_size()
+                )
                 continue
 
             # ==================================================
