@@ -386,6 +386,9 @@ class World:
             extra_links.add(pair)
             connect_rooms(rooms[first_index], rooms[second_index])
 
+        # Retain room metadata for debugging, tests, and future room dressing.
+        self.rooms = rooms
+
     def _generate_moss_patches(self):
         """
         Generate deterministic moss patch overlays for floor tiles.
