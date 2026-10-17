@@ -89,6 +89,12 @@ class Enemy:
 
         self.stop_distance = 55
 
+        # Tile-based route cache: paths are refreshed at tile boundaries to
+        # keep enemies moving cleanly through the 2-tile-wide corridors.
+        self.path = []
+        self.path_goal = None
+        self.path_refresh_timer = 0.0
+
         # ==================================================
         # ATTACK
         # ==================================================
@@ -189,61 +195,87 @@ class Enemy:
             return
 
         # ==================================================
-        # NORMALIZE DIRECTION
+        # TILE-BASED ROUTING
         # ==================================================
 
-        if distance > 0:
-
-            dx /= distance
-            dy /= distance
-
-        movement_x = (
-            dx
-            * self.speed
-            * dt
+        tile_size = world.TILE_SIZE
+        self.path_refresh_timer = max(
+            0.0,
+            self.path_refresh_timer - dt
         )
 
-        movement_y = (
-            dy
-            * self.speed
-            * dt
+        current_tile = (
+            self.rect.x // tile_size,
+            self.rect.y // tile_size
+        )
+        goal_tile = (
+            player.rect.x // tile_size,
+            player.rect.y // tile_size
+        )
+        is_tile_aligned = (
+            self.rect.x % tile_size == 0
+            and self.rect.y % tile_size == 0
         )
 
-        # ==================================================
-        # HORIZONTAL MOVEMENT
-        # ==================================================
+        # Do not replace a route half-way through a tile. This avoids a tiny
+        # backward snap when a target crosses a tile boundary mid-movement.
+        refresh_due = (
+            self.path_refresh_timer <= 0
+            or goal_tile != self.path_goal
+        )
+        if refresh_due and is_tile_aligned:
+            route = world.find_path(current_tile, goal_tile)
+            self.path = route[1:] if len(route) > 1 else []
+            self.path_goal = goal_tile
+            self.path_refresh_timer = 0.5
+
+        if not self.path:
+            return
+
+        target_column, target_row = self.path[0]
+        target_x = target_column * tile_size
+        target_y = target_row * tile_size
+        dx = target_x - self.rect.x
+        dy = target_y - self.rect.y
+
+        if abs(dx) <= 1 and abs(dy) <= 1:
+            # Snap onto tile coordinates before advancing to the next node.
+            self.rect.x = target_x
+            self.rect.y = target_y
+            self.path.pop(0)
+
+            if not self.path:
+                self.x = self.rect.x
+                self.y = self.rect.y
+                return
+
+            target_column, target_row = self.path[0]
+            target_x = target_column * tile_size
+            target_y = target_row * tile_size
+            dx = target_x - self.rect.x
+            dy = target_y - self.rect.y
+
+        # A route node is one tile away, so movement stays axis-aligned and
+        # collision checks remain stable in narrow passages.
+        step = max(1, int(self.speed * dt))
+        movement_x = max(-step, min(step, dx))
+        movement_y = max(-step, min(step, dy))
 
         new_rect = self.rect.copy()
-
-        new_rect.x += int(
-            movement_x
-        )
-
-        if not world.collides_with_wall(
-            new_rect
-        ):
-
+        new_rect.x += movement_x
+        if not world.collides_with_wall(new_rect):
             self.rect.x = new_rect.x
-
-        # ==================================================
-        # VERTICAL MOVEMENT
-        # ==================================================
+        else:
+            self.path = []
+            self.path_refresh_timer = 0.0
 
         new_rect = self.rect.copy()
-
-        new_rect.y += int(
-            movement_y
-        )
-
-        if not world.collides_with_wall(
-            new_rect
-        ):
-
+        new_rect.y += movement_y
+        if not world.collides_with_wall(new_rect):
             self.rect.y = new_rect.y
-
-        # ==================================================
-        # SYNC POSITION
-        # ==================================================
+        else:
+            self.path = []
+            self.path_refresh_timer = 0.0
 
         self.x = self.rect.x
         self.y = self.rect.y
