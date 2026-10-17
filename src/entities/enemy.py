@@ -371,10 +371,10 @@ class Enemy:
                     pygame.Rect(cx - rib_w, y + rib_y - 2, rib_w * 2, 6),
                     0, 3.14, 1
                 )
-            pygame.draw.line(screen, bone, (x + 13, y + 19), (x + 8, y + 26), 3)
             pygame.draw.line(screen, outline, (x + 13, y + 19), (x + 8, y + 26), 5)
-            pygame.draw.line(screen, bone, (x + 27, y + 19), (x + 32, y + 25), 3)
+            pygame.draw.line(screen, bone, (x + 13, y + 19), (x + 8, y + 26), 2)
             pygame.draw.line(screen, outline, (x + 27, y + 19), (x + 32, y + 25), 5)
+            pygame.draw.line(screen, bone, (x + 27, y + 19), (x + 32, y + 25), 2)
             pygame.draw.line(screen, bone, (x + 8, y + 26), (x + 13, y + 28), 3)
             pygame.draw.line(screen, bone, (x + 32, y + 25), (x + 35, y + 22), 3)
 
