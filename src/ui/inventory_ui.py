@@ -408,6 +408,41 @@ class InventoryUI:
             self.selected_slot = new_slot
 
     # ==================================================
+    # RESPONSIVE LAYOUT
+    # ==================================================
+
+    def _calculate_layout(self, screen_size):
+        """Calculate inventory geometry from the current window size."""
+        screen_width, screen_height = screen_size
+
+        panel_width = 620
+        panel_height = 500
+
+        panel_x = max(0, (screen_width - panel_width) // 2)
+        panel_y = max(0, (screen_height - panel_height) // 2)
+        panel = pygame.Rect(
+            panel_x,
+            panel_y,
+            panel_width,
+            panel_height
+        )
+
+        return {
+            "panel": panel,
+            "slot_start_x": panel.left + 50,
+            "slot_start_y": panel.top + 80,
+            "slot_size": 70,
+            "gap": 10,
+            "columns": 4,
+            "button_rect": pygame.Rect(
+                panel.left + 330,
+                panel.top + 410,
+                220,
+                45
+            ),
+        }
+
+    # ==================================================
     # HANDLE CLICK
     # ==================================================
 
@@ -415,7 +450,8 @@ class InventoryUI:
         self,
         mouse_position,
         inventory,
-        player
+        player,
+        screen_size=None
     ):
 
         if not self.visible:
@@ -428,13 +464,19 @@ class InventoryUI:
         # INVENTORY SLOTS
         # ==================================================
 
-        start_x = 220
-        start_y = 170
+        if screen_size is None:
+            screen_size = getattr(
+                self,
+                "_last_screen_size",
+                (1920, 1080)
+            )
 
-        slot_size = 70
-        gap = 10
-
-        columns = 4
+        layout = self._calculate_layout(screen_size)
+        start_x = layout["slot_start_x"]
+        start_y = layout["slot_start_y"]
+        slot_size = layout["slot_size"]
+        gap = layout["gap"]
+        columns = layout["columns"]
 
         for index in range(
             inventory.max_slots
@@ -509,12 +551,7 @@ class InventoryUI:
         # EQUIP BUTTON
         # ==================================================
 
-        button_rect = pygame.Rect(
-            500,
-            500,
-            220,
-            45
-        )
+        button_rect = layout["button_rect"]
 
         if button_rect.collidepoint(
             mouse_x,
@@ -560,6 +597,10 @@ class InventoryUI:
 
             return
 
+        self._last_screen_size = screen.get_size()
+        layout = self._calculate_layout(self._last_screen_size)
+        panel = layout["panel"]
+
         # ==================================================
         # DARK OVERLAY
         # ==================================================
@@ -582,12 +623,7 @@ class InventoryUI:
         # PANEL
         # ==================================================
 
-        panel = pygame.Rect(
-            170,
-            90,
-            620,
-            500
-        )
+        panel = layout["panel"]
 
         pygame.draw.rect(
             screen,
@@ -617,7 +653,7 @@ class InventoryUI:
             (
                 panel.centerx
                 - title.get_width() // 2,
-                115
+                panel.top + 25
             )
         )
 
@@ -625,13 +661,11 @@ class InventoryUI:
         # SLOTS
         # ==================================================
 
-        start_x = 220
-        start_y = 170
-
-        slot_size = 70
-        gap = 10
-
-        columns = 4
+        start_x = layout["slot_start_x"]
+        start_y = layout["slot_start_y"]
+        slot_size = layout["slot_size"]
+        gap = layout["gap"]
+        columns = layout["columns"]
 
         for index in range(
             inventory.max_slots
@@ -797,7 +831,7 @@ class InventoryUI:
                 info_text,
                 (
                     panel.left + 25,
-                    470
+                    panel.top + 380
                 )
             )
 
@@ -821,12 +855,7 @@ class InventoryUI:
 
                     button_text_value = "EQUIP"
 
-                button_rect = pygame.Rect(
-                    500,
-                    500,
-                    220,
-                    45
-                )
+                button_rect = layout["button_rect"]
 
                 pygame.draw.rect(
                     screen,
@@ -867,12 +896,7 @@ class InventoryUI:
 
             elif selected_item.item_type == "consumable":
 
-                button_rect = pygame.Rect(
-                    500,
-                    500,
-                    220,
-                    45
-                )
+                button_rect = layout["button_rect"]
 
                 pygame.draw.rect(
                     screen,
@@ -922,7 +946,7 @@ class InventoryUI:
             (
                 panel.centerx
                 - controls_text.get_width() // 2,
-                530
+                panel.top + 440
             )
         )
 
@@ -941,6 +965,6 @@ class InventoryUI:
             (
                 panel.centerx
                 - close_text.get_width() // 2,
-                555
+                panel.top + 465
             )
         )
