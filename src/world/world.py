@@ -50,53 +50,172 @@ class World:
         self.moss_patches = []
         self._generate_moss_patches()
 
+    def _is_safe_spawn_tile(self, column, row, clearance=1):
+        """Return True when a floor tile has enough clear space around it."""
+        if not (0 < column < self.columns - 1):
+            return False
+        if not (0 < row < self.rows - 1):
+            return False
+        if self.tiles[row][column] != self.FLOOR:
+            return False
+
+        for offset_y in range(-clearance, clearance + 1):
+            for offset_x in range(-clearance, clearance + 1):
+                if self.is_wall(column + offset_x, row + offset_y):
+                    return False
+
+        return True
+
+    def _get_safe_spawn_tiles(self):
+        """Collect floor tiles with a one-tile wall clearance."""
+        return [
+            (column, row)
+            for row in range(1, self.rows - 1)
+            for column in range(1, self.columns - 1)
+            if self._is_safe_spawn_tile(column, row)
+        ]
+
+    def get_center_spawn_position(self):
+        """
+        Return a safe tile nearest the dungeon's center.
+
+        Coordinates are in world pixels and match Player.rect and Enemy.rect.
+        """
+        safe_tiles = self._get_safe_spawn_tiles()
+        if not safe_tiles:
+            # Defensive fallback for an unexpectedly closed dungeon.
+            return (
+                max(0, (self.get_width() - 40) // 2),
+                max(0, (self.get_height() - 40) // 2)
+            )
+
+        center_column = (self.columns - 1) / 2
+        center_row = (self.rows - 1) / 2
+        column, row = min(
+            safe_tiles,
+            key=lambda tile: (
+                (tile[0] - center_column) ** 2
+                + (tile[1] - center_row) ** 2,
+                tile[1],
+                tile[0]
+            )
+        )
+        return (column * self.TILE_SIZE, row * self.TILE_SIZE)
+
     def get_safe_spawn_position(self):
+        """Backward-compatible alias for the safe central spawn."""
+        return self.get_center_spawn_position()
+
+    def get_edge_spawn_positions(self, count, avoid_positions=None):
         """
-        Find a safe spawn position on a floor tile with clearance from walls.
+        Return separated, safe enemy positions near the dungeon's edges.
 
-        Returns (x, y) coordinates for spawning.
+        avoid_positions accepts world-pixel (x, y) positions to keep clear.
         """
-        import random
+        if count <= 0:
+            return []
 
-        rng = random.Random(999)
+        safe_tiles = self._get_safe_spawn_tiles()
+        if not safe_tiles:
+            fallback = self.get_center_spawn_position()
+            return [fallback for _ in range(count)]
 
-        # Try to find a floor tile with clearance
-        for _ in range(1000):
-            row = rng.randint(2, self.rows - 3)
-            column = rng.randint(2, self.columns - 3)
+        if avoid_positions is None:
+            avoid_positions = []
 
-            if self.tiles[row][column] != self.FLOOR:
-                continue
+        used_tiles = [
+            (int(x) // self.TILE_SIZE, int(y) // self.TILE_SIZE)
+            for x, y in avoid_positions
+        ]
 
-            # Check 3x3 area around tile for walls
-            has_wall_nearby = False
-            for dy in range(-1, 2):
-                for dx in range(-1, 2):
-                    check_row = row + dy
-                    check_col = column + dx
-                    if 0 <= check_col < self.columns and 0 <= check_row < self.rows:
-                        if self.tiles[check_row][check_col] == self.WALL:
-                            has_wall_nearby = True
-                            break
-                if has_wall_nearby:
+        def edge_depth(tile):
+            column, row = tile
+            return min(
+                column, row,
+                self.columns - 1 - column,
+                self.rows - 1 - row
+            )
+
+        # Spawn inside the boundary wall, preferring the outer ten-tile band.
+        edge_candidates = [
+            tile for tile in safe_tiles if edge_depth(tile) <= 10
+        ]
+        if len(edge_candidates) < count:
+            edge_candidates = [
+                tile for tile in safe_tiles if edge_depth(tile) <= 15
+            ]
+        if not edge_candidates:
+            edge_candidates = safe_tiles[:]
+
+        targets = [
+            (5, 5),
+            (self.columns - 6, 5),
+            (5, self.rows - 6),
+            (self.columns - 6, self.rows - 6)
+        ]
+        selected = []
+
+        for index in range(count):
+            target = targets[index % len(targets)]
+            target_left = target[0] < self.columns // 2
+            target_top = target[1] < self.rows // 2
+
+            quadrant_candidates = [
+                tile for tile in edge_candidates
+                if (tile[0] < self.columns // 2) == target_left
+                and (tile[1] < self.rows // 2) == target_top
+            ]
+            if not quadrant_candidates:
+                quadrant_candidates = edge_candidates
+
+            chosen = None
+            for min_separation in (10, 7, 4, 1, 0):
+                pool = [
+                    tile for tile in quadrant_candidates
+                    if tile not in selected
+                    and all(
+                        (tile[0] - used[0]) ** 2
+                        + (tile[1] - used[1]) ** 2
+                        >= min_separation ** 2
+                        for used in used_tiles
+                    )
+                ]
+                if pool:
+                    chosen = min(
+                        pool,
+                        key=lambda tile: (
+                            (tile[0] - target[0]) ** 2
+                            + (tile[1] - target[1]) ** 2,
+                            edge_depth(tile),
+                            tile[1],
+                            tile[0]
+                        )
+                    )
                     break
 
-            if not has_wall_nearby:
-                # Return tile center position
-                x = column * self.TILE_SIZE
-                y = row * self.TILE_SIZE
-                return (x, y)
+            if chosen is None:
+                remaining = [tile for tile in safe_tiles if tile not in selected]
+                if not remaining:
+                    break
+                chosen = max(
+                    remaining,
+                    key=lambda tile: (
+                        min(
+                            ((tile[0] - used[0]) ** 2
+                             + (tile[1] - used[1]) ** 2)
+                            for used in used_tiles
+                        ) if used_tiles else 0,
+                        -edge_depth(tile)
+                    )
+                )
 
-        # Fallback: return first floor tile found
-        for row in range(1, self.rows - 1):
-            for column in range(1, self.columns - 1):
-                if self.tiles[row][column] == self.FLOOR:
-                    x = column * self.TILE_SIZE
-                    y = row * self.TILE_SIZE
-                    return (x, y)
+            selected.append(chosen)
+            used_tiles.append(chosen)
 
-        # Ultimate fallback: return center of map (may be in wall)
-        return (self.get_width() // 2, self.get_height() // 2)
+        return [
+            (column * self.TILE_SIZE, row * self.TILE_SIZE)
+            for column, row in selected
+        ]
 
     def create_dungeon(self):
         """
