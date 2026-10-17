@@ -522,24 +522,32 @@ class Enemy:
             pygame.draw.line(screen, leather, (x + 31, y + 25), (x + 34, y + 21), 3)
             pygame.draw.line(screen, (194, 211, 214), (x + 34, y + 21), (x + 38, y + 16), 2)
 
-        # Red, high-contrast enemy health bars remain readable over the dark
-        # scene; they shrink with health but do not change to unrelated hues.
+    def render_health_bar(self, screen, camera):
+        """Render the enemy health indicator above the lighting pass."""
+        if self.is_dead():
+            return
+
+        screen_rect = camera.apply(self.rect)
         bar_width = 52
         bar_height = 6
         bar_x = screen_rect.centerx - bar_width // 2
         bar_y = screen_rect.top - 13
         background_rect = pygame.Rect(bar_x, bar_y, bar_width, bar_height)
         pygame.draw.rect(screen, (20, 10, 12), background_rect)
+
         ratio = max(0.0, min(1.0, self.health / self.max_health))
         fill_width = int(bar_width * ratio)
         if fill_width > 0:
             pygame.draw.rect(
-                screen, (211, 36, 43),
+                screen,
+                (211, 36, 43),
                 pygame.Rect(bar_x, bar_y, fill_width, bar_height)
             )
             pygame.draw.line(
-                screen, (255, 112, 103),
+                screen,
+                (255, 112, 103),
                 (bar_x, bar_y),
-                (bar_x + fill_width - 1, bar_y), 1
+                (bar_x + fill_width - 1, bar_y),
+                1
             )
         pygame.draw.rect(screen, (61, 31, 28), background_rect, 1)
