@@ -63,8 +63,8 @@ class Game:
 
         self.player = Player()
 
-        # Set safe spawn position after world is generated
-        spawn_x, spawn_y = self.world.get_safe_spawn_position()
+        # Spawn the player on the safe floor tile nearest the map center.
+        spawn_x, spawn_y = self.world.get_center_spawn_position()
         self.player.x = spawn_x
         self.player.y = spawn_y
         self.player.rect.x = spawn_x
@@ -93,13 +93,21 @@ class Game:
         # ENEMIES
         # ==================================================
 
-        # Spawn enemies at safe positions
+        # Spawn enemies at separated safe positions near the map edges.
         self.enemies = []
         enemy_types = ["Goblin", "Skeleton", "Orc", "Goblin"]
+        enemy_positions = self.world.get_edge_spawn_positions(
+            len(enemy_types),
+            avoid_positions=[(spawn_x, spawn_y)]
+        )
 
-        for enemy_type in enemy_types:
-            spawn_x, spawn_y = self.world.get_safe_spawn_position()
-            self.enemies.append(Enemy(spawn_x, spawn_y, enemy_type))
+        for enemy_type, (enemy_x, enemy_y) in zip(
+            enemy_types,
+            enemy_positions
+        ):
+            self.enemies.append(
+                Enemy(enemy_x, enemy_y, enemy_type)
+            )
 
         # ==================================================
         # DAMAGE NUMBERS
@@ -465,8 +473,8 @@ class Game:
 
         self.player = Player()
 
-        # Set safe spawn position
-        spawn_x, spawn_y = self.world.get_safe_spawn_position()
+        # Respawn the player on the safe floor tile nearest the map center.
+        spawn_x, spawn_y = self.world.get_center_spawn_position()
         self.player.x = spawn_x
         self.player.y = spawn_y
         self.player.rect.x = spawn_x
@@ -495,13 +503,21 @@ class Game:
         # RESET ENEMIES
         # ==================================================
 
-        # Spawn enemies at safe positions
+        # Spawn enemies at separated safe positions near the map edges.
         self.enemies = []
         enemy_types = ["Goblin", "Skeleton", "Orc", "Goblin"]
+        enemy_positions = self.world.get_edge_spawn_positions(
+            len(enemy_types),
+            avoid_positions=[(spawn_x, spawn_y)]
+        )
 
-        for enemy_type in enemy_types:
-            spawn_x, spawn_y = self.world.get_safe_spawn_position()
-            self.enemies.append(Enemy(spawn_x, spawn_y, enemy_type))
+        for enemy_type, (enemy_x, enemy_y) in zip(
+            enemy_types,
+            enemy_positions
+        ):
+            self.enemies.append(
+                Enemy(enemy_x, enemy_y, enemy_type)
+            )
 
         # ==================================================
         # RESET DAMAGE NUMBERS
