@@ -10,6 +10,7 @@ from core.settings import (
 from core.input import InputManager
 from core.camera import Camera
 from core.damage_number import DamageNumber
+from graphics.lighting import LightingSystem
 
 from entities.player import Player
 from entities.enemy import Enemy
@@ -155,6 +156,12 @@ class Game:
         self.camera = Camera(
             *self.screen.get_size()
         )
+
+        # ==================================================
+        # LIGHTING
+        # ==================================================
+
+        self.lighting = LightingSystem()
 
         # ==================================================
         # HUD
@@ -915,6 +922,19 @@ class Game:
                 self.screen,
                 self.camera
             )
+
+        # ==================================================
+        # LIGHTING
+        # ==================================================
+
+        # Shade only the world and actors. UI is rendered afterward so its
+        # labels and panels remain readable in the dark dungeon.
+        self.lighting.render(
+            self.screen,
+            self.world.torches,
+            self.player,
+            self.camera
+        )
 
         # ==================================================
         # HUD
