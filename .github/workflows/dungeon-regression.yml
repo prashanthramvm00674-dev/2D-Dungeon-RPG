@@ -30,3 +30,6 @@ jobs:
 
       - name: Test dungeon generation and navigation
         run: python tests/test_dungeon_generation.py
+
+      - name: Smoke-test graphics pipeline
+        run: python tests/test_visual_rendering.py
