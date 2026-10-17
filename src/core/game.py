@@ -458,7 +458,8 @@ class Game:
         self.camera.update(
             self.player.rect,
             self.world.get_width(),
-            self.world.get_height()
+            self.world.get_height(),
+            *self.screen.get_size()
         )
 
     # ======================================================
@@ -550,7 +551,8 @@ class Game:
         self.camera.update(
             self.player.rect,
             self.world.get_width(),
-            self.world.get_height()
+            self.world.get_height(),
+            *self.screen.get_size()
         )
 
     # ======================================================
