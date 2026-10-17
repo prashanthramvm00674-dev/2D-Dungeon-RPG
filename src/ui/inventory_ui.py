@@ -436,7 +436,7 @@ class InventoryUI:
             "columns": 4,
             "button_rect": pygame.Rect(
                 panel.left + 330,
-                panel.top + 410,
+                panel.top + 370,
                 220,
                 45
             ),
@@ -831,7 +831,7 @@ class InventoryUI:
                 info_text,
                 (
                     panel.left + 25,
-                    panel.top + 380
+                    panel.top + 330
                 )
             )
 
@@ -946,7 +946,7 @@ class InventoryUI:
             (
                 panel.centerx
                 - controls_text.get_width() // 2,
-                panel.top + 440
+                panel.top + 430
             )
         )
 
@@ -965,6 +965,6 @@ class InventoryUI:
             (
                 panel.centerx
                 - close_text.get_width() // 2,
-                panel.top + 465
+                panel.top + 460
             )
         )
