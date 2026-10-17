@@ -54,6 +54,29 @@ class World:
         self.torches = []
         self._generate_torches()
 
+        # Large-scale flagstones span several 40px gameplay tiles. Keep this
+        # entirely visual so movement and collision remain tile-based.
+        self.floor_region = self.dungeon_textures.get_floor_region(
+            960,
+            720,
+            seed=1927
+        )
+        self.floor_region_width, self.floor_region_height = (
+            self.floor_region.get_size()
+        )
+        self.floor_region_variants = {
+            (False, False): self.floor_region,
+            (True, False): pygame.transform.flip(
+                self.floor_region, True, False
+            ),
+            (False, True): pygame.transform.flip(
+                self.floor_region, False, True
+            ),
+            (True, True): pygame.transform.flip(
+                self.floor_region, True, True
+            ),
+        }
+
     def _is_safe_spawn_tile(self, column, row, clearance=1):
         """Return True when a floor tile has enough clear space around it."""
         if not (0 < column < self.columns - 1):
@@ -543,9 +566,85 @@ class World:
         return False
 
     def render(self, screen, camera):
+        """Draw macro flagstones first, then moss, walls, and decorative torches."""
+        viewport = screen.get_rect()
+        floor_width = self.floor_region_width
+        floor_height = self.floor_region_height
+
+        # ==================================================
+        # LARGE-SCALE STONE FLOOR
+        # ==================================================
+
+        # The surface uses large slabs to match the supplied visual reference.
+        # Mirrored repeats keep neighbouring regions seamless at their edges.
+        region_columns = (
+            self.get_width() + floor_width - 1
+        ) // floor_width
+        region_rows = (
+            self.get_height() + floor_height - 1
+        ) // floor_height
+
+        for region_row in range(region_rows):
+            world_y = region_row * floor_height
+
+            for region_column in range(region_columns):
+                world_x = region_column * floor_width
+                world_region = pygame.Rect(
+                    world_x,
+                    world_y,
+                    floor_width,
+                    floor_height
+                )
+                screen_region = camera.apply(world_region)
+
+                if not screen_region.colliderect(viewport):
+                    continue
+
+                texture = self.floor_region_variants[
+                    (region_column % 2 == 1, region_row % 2 == 1)
+                ]
+                screen.blit(texture, screen_region.topleft)
+
+        # ==================================================
+        # EXISTING MOSS PATCH OVERLAYS
+        # ==================================================
+
+        # Keep the original deterministic moss patches. They are generated
+        # only over floor tiles, so walls are not painted over by these details.
+        for patch in self.moss_patches:
+            world_x = patch["column"] * self.TILE_SIZE
+            world_y = patch["row"] * self.TILE_SIZE
+            width = patch["width_tiles"] * self.TILE_SIZE
+            height = patch["height_tiles"] * self.TILE_SIZE
+
+            world_rect = pygame.Rect(
+                world_x,
+                world_y,
+                width,
+                height
+            )
+            screen_rect = camera.apply(world_rect)
+
+            if not screen_rect.colliderect(viewport):
+                continue
+
+            moss_texture = self.dungeon_textures.get_moss_patch(
+                patch["width_tiles"],
+                patch["height_tiles"],
+                patch["seed"]
+            )
+            screen.blit(moss_texture, screen_rect)
+
+        # ==================================================
+        # WALLS ON TOP OF THE FLOOR
+        # ==================================================
+
+        # Preserve the 40x40 logical wall geometry. Only wall tiles are drawn
+        # here; their visual and collision size remain unchanged.
         for row in range(self.rows):
             for column in range(self.columns):
-                tile = self.tiles[row][column]
+                if self.tiles[row][column] != self.WALL:
+                    continue
 
                 world_rect = pygame.Rect(
                     column * self.TILE_SIZE,
@@ -553,54 +652,14 @@ class World:
                     self.TILE_SIZE,
                     self.TILE_SIZE
                 )
-
                 screen_rect = camera.apply(world_rect)
 
-                # Skip tiles outside screen
-                if not screen_rect.colliderect(
-                    screen.get_rect()
-                ):
+                if not screen_rect.colliderect(viewport):
                     continue
 
-                if tile == self.WALL:
-                    # Wall tiles use textured stone blocks
-                    # Deterministic variant based on tile position
-                    variant = (row * self.columns + column) % 12
-                    wall_texture = self.dungeon_textures.get_wall_tile(variant)
-
-                    screen.blit(wall_texture, screen_rect)
-                else:
-                    # Floor tiles use detailed stone textures
-                    # Deterministic variant based on tile position
-                    variant = (row * self.columns + column) % 16
-                    floor_texture = self.dungeon_textures.get_floor_tile(variant)
-
-                    screen.blit(floor_texture, screen_rect)
-
-        # ==================================================
-        # MOSS PATCH OVERLAYS
-        # ==================================================
-
-        for patch in self.moss_patches:
-            world_x = patch['column'] * self.TILE_SIZE
-            world_y = patch['row'] * self.TILE_SIZE
-            width = patch['width_tiles'] * self.TILE_SIZE
-            height = patch['height_tiles'] * self.TILE_SIZE
-
-            world_rect = pygame.Rect(world_x, world_y, width, height)
-            screen_rect = camera.apply(world_rect)
-
-            # Skip patches outside screen
-            if not screen_rect.colliderect(screen.get_rect()):
-                continue
-
-            moss_texture = self.dungeon_textures.get_moss_patch(
-                patch['width_tiles'],
-                patch['height_tiles'],
-                patch['seed']
-            )
-
-            screen.blit(moss_texture, screen_rect)
+                variant = (row * self.columns + column) % 12
+                wall_texture = self.dungeon_textures.get_wall_tile(variant)
+                screen.blit(wall_texture, screen_rect)
 
         # ==================================================
         # WALL TORCHES
