@@ -182,6 +182,25 @@ class Game:
                 continue
 
             # ==================================================
+            # INVENTORY MOUSE INPUT
+            # ==================================================
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if (
+                    event.button == 1
+                    and self.inventory_ui.visible
+                    and not self.player.is_dead
+                ):
+                    self.inventory_ui.handle_click(
+                        event.pos,
+                        self.player.inventory,
+                        self.player,
+                        self.screen.get_size()
+                    )
+
+                continue
+
+            # ==================================================
             # KEYBOARD
             # ==================================================
 
