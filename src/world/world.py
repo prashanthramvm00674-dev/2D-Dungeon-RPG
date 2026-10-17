@@ -50,6 +50,10 @@ class World:
         self.moss_patches = []
         self._generate_moss_patches()
 
+        # Fixed decorative wall torches also provide lighting source positions.
+        self.torches = []
+        self._generate_torches()
+
     def _is_safe_spawn_tile(self, column, row, clearance=1):
         """Return True when a floor tile has enough clear space around it."""
         if not (0 < column < self.columns - 1):
@@ -370,6 +374,136 @@ class World:
                         })
                         break
 
+    def _generate_torches(self, count=12):
+        """
+        Place a deterministic set of torches on interior wall tiles.
+
+        Torches are decorative only: they do not alter the tile map, player
+        movement, enemy movement, or collision geometry.
+        """
+        import random
+
+        rng = random.Random(6419)
+        candidates = []
+
+        for row in range(2, self.rows - 2):
+            for column in range(2, self.columns - 2):
+                if self.tiles[row][column] != self.WALL:
+                    continue
+
+                adjacent_floor = (
+                    not self.is_wall(column, row - 1)
+                    or not self.is_wall(column + 1, row)
+                    or not self.is_wall(column, row + 1)
+                    or not self.is_wall(column - 1, row)
+                )
+
+                if adjacent_floor:
+                    candidates.append((column, row))
+
+        rng.shuffle(candidates)
+        selected = []
+
+        # Relax the spacing gradually if an irregular generated map has fewer
+        # widely separated wall locations than requested.
+        for min_separation in (8, 6, 4, 2, 0):
+            selected = []
+
+            for candidate in candidates:
+                if all(
+                    (candidate[0] - placed[0]) ** 2
+                    + (candidate[1] - placed[1]) ** 2
+                    >= min_separation ** 2
+                    for placed in selected
+                ):
+                    selected.append(candidate)
+
+                    if len(selected) >= count:
+                        break
+
+            if len(selected) >= min(count, 8):
+                break
+
+        self.torches = [
+            {
+                "tile_x": column,
+                "tile_y": row,
+                "x": column * self.TILE_SIZE + self.TILE_SIZE // 2,
+                "y": row * self.TILE_SIZE + self.TILE_SIZE // 2,
+            }
+            for column, row in selected
+        ]
+
+    def render_torches(self, screen, camera):
+        """Draw small pixel-style wall torches over their wall tiles."""
+        viewport = screen.get_rect()
+
+        for index, torch in enumerate(self.torches):
+            world_rect = pygame.Rect(
+                torch["x"] - 9,
+                torch["y"] - 14,
+                18,
+                28
+            )
+            rect = camera.apply(world_rect)
+
+            if not rect.colliderect(viewport):
+                continue
+
+            center_x = rect.centerx
+            top_y = rect.top
+
+            # Wall bracket and dark silhouette.
+            pygame.draw.rect(
+                screen,
+                (15, 18, 23),
+                pygame.Rect(center_x - 5, top_y + 12, 10, 13)
+            )
+            pygame.draw.rect(
+                screen,
+                (105, 67, 41),
+                pygame.Rect(center_x - 3, top_y + 10, 6, 14)
+            )
+            pygame.draw.rect(
+                screen,
+                (174, 112, 57),
+                pygame.Rect(center_x - 4, top_y + 10, 8, 3)
+            )
+
+            # A crisp three-layer flame; the small variation is deterministic.
+            flame_peak_y = top_y + (index % 3)
+            pygame.draw.polygon(
+                screen,
+                (164, 47, 19),
+                [
+                    (center_x, flame_peak_y),
+                    (center_x - 7, top_y + 13),
+                    (center_x - 4, top_y + 18),
+                    (center_x + 5, top_y + 18),
+                    (center_x + 7, top_y + 12)
+                ]
+            )
+            pygame.draw.polygon(
+                screen,
+                (255, 124, 32),
+                [
+                    (center_x, top_y + 4),
+                    (center_x - 4, top_y + 13),
+                    (center_x, top_y + 17),
+                    (center_x + 4, top_y + 12)
+                ]
+            )
+            pygame.draw.polygon(
+                screen,
+                (255, 220, 105),
+                [
+                    (center_x, top_y + 10),
+                    (center_x - 2, top_y + 14),
+                    (center_x, top_y + 16),
+                    (center_x + 2, top_y + 13)
+                ]
+            )
+
     def get_width(self):
         return self.columns * self.TILE_SIZE
 
@@ -467,3 +601,9 @@ class World:
             )
 
             screen.blit(moss_texture, screen_rect)
+
+        # ==================================================
+        # WALL TORCHES
+        # ==================================================
+
+        self.render_torches(screen, camera)
