@@ -34,17 +34,19 @@ class Game:
 
         pygame.init()
 
-        # Size the initial window to fit the available desktop. The game's
-        # logical world is larger than the viewport, so the camera must use
-        # the actual visible display-surface size rather than an off-screen
-        # 1920x1080 surface on a smaller monitor.
+        # Start fullscreen using the actual desktop resolution. The camera
+        # uses the resulting display size, while F11 lets the player switch
+        # back to a resizable window.
         display_info = pygame.display.Info()
-        desktop_width = display_info.current_w or SCREEN_WIDTH
-        desktop_height = display_info.current_h or SCREEN_HEIGHT
+        self.desktop_size = (
+            display_info.current_w or SCREEN_WIDTH,
+            display_info.current_h or SCREEN_HEIGHT
+        )
 
+        desktop_width, desktop_height = self.desktop_size
+        aspect_ratio = SCREEN_WIDTH / SCREEN_HEIGHT
         available_width = max(640, desktop_width - 40)
         available_height = max(480, desktop_height - 100)
-        aspect_ratio = SCREEN_WIDTH / SCREEN_HEIGHT
 
         window_width = min(
             SCREEN_WIDTH,
@@ -56,10 +58,12 @@ class Game:
             available_height,
             int(window_width / aspect_ratio)
         )
+        self.windowed_size = (window_width, window_height)
+        self.fullscreen = True
 
         self.screen = pygame.display.set_mode(
-            (window_width, window_height),
-            pygame.RESIZABLE
+            self.desktop_size,
+            pygame.FULLSCREEN
         )
 
         pygame.display.set_caption(
@@ -259,6 +263,32 @@ class Game:
             # ==================================================
 
             if event.type == pygame.KEYDOWN:
+
+                # ==================================================
+                # FULLSCREEN TOGGLE
+                # ==================================================
+
+                if event.key == pygame.K_F11:
+                    self.fullscreen = not self.fullscreen
+
+                    if self.fullscreen:
+                        self.screen = pygame.display.set_mode(
+                            self.desktop_size,
+                            pygame.FULLSCREEN
+                        )
+                    else:
+                        self.screen = pygame.display.set_mode(
+                            self.windowed_size,
+                            pygame.RESIZABLE
+                        )
+
+                    self.camera.update(
+                        self.player.rect,
+                        self.world.get_width(),
+                        self.world.get_height(),
+                        *self.screen.get_size()
+                    )
+                    continue
 
                 # ==================================================
                 # GAME OVER
