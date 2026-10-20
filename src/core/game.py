@@ -1102,6 +1102,7 @@ class Game:
             )
             self.fullscreen = True
 
+        self.settings_manager.set("start_fullscreen", self.fullscreen)
         pygame.display.set_caption(WINDOW_TITLE)
         self.camera.update(
             self.player.rect,
@@ -1501,6 +1502,8 @@ class Game:
 
         self.paused = False
         self.pause_menu_buttons = {}
+        self.settings_menu_visible = False
+        self.settings_buttons = {}
 
         # ==================================================
         # CLOSE INVENTORY
@@ -1531,7 +1534,7 @@ class Game:
         self.screen.blit(overlay, (0, 0))
 
         panel_width = min(480, screen_width - 36)
-        panel_height = min(390, screen_height - 36)
+        panel_height = min(430, screen_height - 36)
         panel = pygame.Rect(
             (screen_width - panel_width) // 2,
             (screen_height - panel_height) // 2,
@@ -1558,18 +1561,30 @@ class Game:
         )
         self.screen.blit(
             subtitle,
-            (panel.centerx - subtitle.get_width() // 2, panel.top + 72)
+            (panel.centerx - subtitle.get_width() // 2, panel.top + 59)
         )
 
+        if self.persistence_status:
+            status_surface = pygame.font.Font(None, 20).render(
+                self.persistence_status[:72], True, (163, 207, 166)
+            )
+            self.screen.blit(
+                status_surface,
+                (panel.centerx - status_surface.get_width() // 2, panel.top + 81)
+            )
+
         button_width = min(310, panel.width - 46)
-        button_height = 47
-        button_gap = 8
-        first_y = panel.top + 115
+        button_height = 35
+        button_gap = 4
+        first_y = panel.top + 104
         fullscreen_label = (
             "EXIT FULLSCREEN" if self.fullscreen else "ENTER FULLSCREEN"
         )
         button_specs = (
             ("resume", "RESUME", (35, 73, 53), (119, 198, 133)),
+            ("save", "SAVE GAME  [F5]", (38, 59, 48), (126, 183, 129)),
+            ("load", "LOAD GAME  [F9]", (38, 59, 74), (150, 185, 198)),
+            ("settings", "SETTINGS", (50, 49, 67), (160, 156, 199)),
             ("restart", "RESTART RUN", (78, 53, 29), (241, 185, 91)),
             ("fullscreen", fullscreen_label, (38, 59, 74), (150, 185, 198)),
             ("quit", "QUIT GAME", (69, 35, 36), (208, 113, 102)),
@@ -1611,7 +1626,93 @@ class Game:
         )
         self.screen.blit(
             hint,
-            (panel.centerx - hint.get_width() // 2, panel.bottom - 28)
+            (panel.centerx - hint.get_width() // 2, panel.bottom - 18)
+        )
+
+    def render_settings_menu(self):
+        """Draw persistent graphics/startup preferences above the pause menu."""
+        screen_width, screen_height = self.screen.get_size()
+        overlay = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
+        overlay.fill((2, 4, 8, 160))
+        self.screen.blit(overlay, (0, 0))
+
+        panel_width = min(540, screen_width - 32)
+        panel_height = min(410, screen_height - 32)
+        panel = pygame.Rect(
+            (screen_width - panel_width) // 2,
+            (screen_height - panel_height) // 2,
+            panel_width,
+            panel_height,
+        )
+        pygame.draw.rect(self.screen, (2, 4, 7), panel.move(4, 5))
+        pygame.draw.rect(self.screen, (11, 17, 23), panel)
+        pygame.draw.rect(self.screen, (121, 75, 41), panel, 3)
+        pygame.draw.rect(self.screen, (235, 171, 81), panel.inflate(-8, -8), 1)
+
+        title = self.pause_small_font.render(
+            "DUNGEON SETTINGS", True, (246, 190, 94)
+        )
+        self.screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 23))
+        subtitle = pygame.font.Font(None, 22).render(
+            "Changes are saved automatically.", True, (171, 183, 190)
+        )
+        self.screen.blit(
+            subtitle,
+            (panel.centerx - subtitle.get_width() // 2, panel.top + 55)
+        )
+
+        values = self.settings_manager.values
+        specifications = (
+            ("start_fullscreen", f"START FULLSCREEN: {'ON' if values['start_fullscreen'] else 'OFF'}"),
+            ("lighting_enabled", f"DUNGEON LIGHTING: {'ON' if values['lighting_enabled'] else 'OFF'}"),
+            ("post_processing_enabled", f"SCENE FINISH: {'ON' if values['post_processing_enabled'] else 'OFF'}"),
+            ("autosave_on_quit", f"SAVE ON EXIT: {'ON' if values['autosave_on_quit'] else 'OFF'}"),
+            ("back", "BACK TO MENU"),
+        )
+        self.settings_buttons = {}
+        button_width = min(380, panel.width - 48)
+        button_height = 43
+        button_gap = 8
+        first_y = panel.top + 91
+        mouse_pos = pygame.mouse.get_pos()
+
+        for index, (key, label) in enumerate(specifications):
+            button = pygame.Rect(
+                panel.centerx - button_width // 2,
+                first_y + index * (button_height + button_gap),
+                button_width,
+                button_height,
+            )
+            self.settings_buttons[key] = button
+            hover = button.collidepoint(mouse_pos)
+            if key == "back":
+                fill, border = (60, 44, 30), (218, 164, 83)
+            elif key in ("lighting_enabled", "post_processing_enabled"):
+                enabled = values[key]
+                fill = (31, 68, 49) if enabled else (70, 43, 42)
+                border = (118, 194, 133) if enabled else (190, 112, 102)
+            else:
+                fill, border = (38, 59, 74), (150, 185, 198)
+
+            actual_fill = tuple(min(255, channel + 14) for channel in fill) if hover else fill
+            pygame.draw.rect(self.screen, (3, 6, 9), button.move(2, 3))
+            pygame.draw.rect(self.screen, actual_fill, button)
+            pygame.draw.rect(self.screen, border, button, 2)
+            label_surface = pygame.font.Font(None, 25).render(
+                label, True, (244, 238, 223)
+            )
+            self.screen.blit(
+                label_surface,
+                (button.centerx - label_surface.get_width() // 2,
+                 button.centery - label_surface.get_height() // 2),
+            )
+
+        hint = pygame.font.Font(None, 19).render(
+            "ESC / ENTER  -  BACK", True, (154, 163, 168)
+        )
+        self.screen.blit(
+            hint,
+            (panel.centerx - hint.get_width() // 2, panel.bottom - 23)
         )
 
     # ======================================================
@@ -1893,12 +1994,13 @@ class Game:
 
         # Shade only the world and actors. UI is rendered afterward so its
         # labels and panels remain readable in the dark dungeon.
-        self.lighting.render(
-            self.screen,
-            self.world.torches,
-            self.player,
-            self.camera
-        )
+        if self.settings_manager.values["lighting_enabled"]:
+            self.lighting.render(
+                self.screen,
+                self.world.torches,
+                self.player,
+                self.camera
+            )
 
         # Re-draw flame silhouettes after the ambient pass so the fire remains
         # a crisp, bright focal point; keep enemy health bars similarly legible.
@@ -1922,7 +2024,8 @@ class Game:
 
         # Process the world/actors only. The UI rendered below remains crisp,
         # readable, and visually identical to the approved HUD design.
-        self.post_processing.apply(self.screen)
+        if self.settings_manager.values["post_processing_enabled"]:
+            self.post_processing.apply(self.screen)
 
         # Draw the interaction hint after scene finishing so it remains crisp.
         self.npc.render_interaction_prompt(
@@ -1973,6 +2076,8 @@ class Game:
         if self.paused:
 
             self.render_pause_menu()
+            if self.settings_menu_visible:
+                self.render_settings_menu()
 
         # ==================================================
         # GAME OVER
@@ -2035,5 +2140,8 @@ class Game:
         # ==================================================
         # QUIT
         # ==================================================
+
+        if self.settings_manager.values["autosave_on_quit"]:
+            self.save_game()
 
         pygame.quit()
