@@ -33,3 +33,6 @@ jobs:
 
       - name: Smoke-test graphics pipeline
         run: python tests/test_visual_rendering.py
+
+      - name: Test inventory interactions and hotbar
+        run: python tests/test_inventory_ui.py
