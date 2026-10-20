@@ -26,6 +26,9 @@ def press(game, key):
 def main():
     game = Game()
 
+    # Windowed startup makes screen capture accessible without requiring F11.
+    assert not game.fullscreen
+
     # Populate the HUD hitboxes first, just like the real first frame.
     game.render()
     assert game.player.inventory.get_item_count(HEALTH_POTION) == 3
