@@ -15,11 +15,10 @@ class ScenePostProcessor:
     toward the playable center without expensive per-frame pixel processing.
     """
 
-    # Multipliers are applied before the additive lift. Keeping them near 255
-    # protects hot torch highlights while slightly compressing the brightest
-    # end of the range.
-    TONE_MULTIPLIER = (248, 250, 252)
-    SHADOW_LIFT = (9, 9, 10)
+    # A very transparent cool highlight overlay gives dark areas a gentle
+    # shadow lift while keeping vivid amber torch lights recognizable.
+    TONE_TINT = (135, 145, 160)
+    TONE_ALPHA = 18
 
     # Subtle maximum opacity at the extreme corners; the middle stays clear.
     VIGNETTE_MAX_ALPHA = 20
@@ -73,34 +72,24 @@ class ScenePostProcessor:
         self._vignette_cache[cache_key] = vignette
         return vignette
 
-    def _get_grade_surfaces(self, size):
-        """Cache solid blend surfaces so SDL can process each frame in C."""
+    def _get_grade_surface(self, size):
+        """Cache a translucent color-grade surface for the current viewport."""
         cached = self._grade_surface_cache.get(size)
         if cached is not None:
             return cached
 
-        tone = pygame.Surface(size, depth=32)
-        tone.fill(self.TONE_MULTIPLIER)
-        lift = pygame.Surface(size, depth=32)
-        lift.fill(self.SHADOW_LIFT)
-        cached = (tone, lift)
-        self._grade_surface_cache[size] = cached
-        return cached
+        grade = pygame.Surface(size, pygame.SRCALPHA, 32)
+        grade.fill((*self.TONE_TINT, self.TONE_ALPHA))
+        self._grade_surface_cache[size] = grade
+        return grade
 
     def apply(self, screen):
-        """Apply a small shadow-recovery grade and a cached soft vignette."""
-        # Blitting cached blend surfaces invokes SDL's fast RGB blend paths.
-        # This avoids a NumPy dependency or costly per-frame Python pixel loop.
-        tone, lift = self._get_grade_surfaces(screen.get_size())
+        """Apply a gentle shadow-recovery grade and a cached soft vignette."""
+        # Both are cached full-screen blits: no per-frame allocation, rescaling,
+        # NumPy dependency, or Python-level pixel loop.
         screen.blit(
-            tone,
-            (0, 0),
-            special_flags=pygame.BLEND_RGB_MULT
-        )
-        screen.blit(
-            lift,
-            (0, 0),
-            special_flags=pygame.BLEND_RGB_ADD
+            self._get_grade_surface(screen.get_size()),
+            (0, 0)
         )
         screen.blit(
             self._build_vignette(screen.get_size()),
