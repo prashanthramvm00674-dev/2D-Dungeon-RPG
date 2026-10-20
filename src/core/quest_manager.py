@@ -6,7 +6,7 @@ class QuestManager:
 
     QUEST_ID = "dungeon_purge"
     QUEST_NAME = "THE DUNGEON PURGE"
-    DESCRIPTION = "Defeat every enemy across all four waves."
+    DESCRIPTION = "Survive all four waves and defeat the dungeon guardian."
     REWARD_XP = 50
 
     def __init__(self):
