@@ -18,6 +18,7 @@ class WaveManager:
 
     ACTIVE = "active"
     INTERMISSION = "intermission"
+    BOSS = "boss"
     VICTORY = "victory"
 
     MAX_ALIVE_ENEMIES = 5
@@ -73,9 +74,30 @@ class WaveManager:
     def is_intermission(self):
         return self.phase == self.INTERMISSION
 
+    @property
+    def is_boss(self):
+        """Whether the final guardian encounter is active."""
+        return self.phase == self.BOSS
+
     def remaining_count(self, alive_count):
-        """Count living enemies plus queued enemies in the current wave."""
-        return max(0, int(alive_count)) + len(self.pending_enemy_types)
+        """Count living, queued enemies and the active guardian, if any."""
+        boss_remaining = 1 if self.is_boss else 0
+        return (
+            max(0, int(alive_count))
+            + len(self.pending_enemy_types)
+            + boss_remaining
+        )
+
+    def defeat_boss(self):
+        """Finish the run only when the guardian encounter is active."""
+        if not self.is_boss:
+            return False
+
+        self.phase = self.VICTORY
+        self.announcement = ""
+        self.announcement_timer = 0.0
+        self.intermission_remaining = 0.0
+        return True
 
     def update(self, dt, alive_count, spawn_enemy):
         """Advance the state machine and spawn at most one queued enemy.
@@ -88,7 +110,7 @@ class WaveManager:
         alive_count = max(0, int(alive_count))
         self.announcement_timer = max(0.0, self.announcement_timer - dt)
 
-        if self.phase == self.VICTORY:
+        if self.phase in (self.BOSS, self.VICTORY):
             return
 
         if self.phase == self.INTERMISSION:
@@ -124,9 +146,11 @@ class WaveManager:
 
         if not self.pending_enemy_types and alive_count == 0:
             if self.current_wave >= self.total_waves:
-                self.phase = self.VICTORY
-                self.announcement = ""
-                self.announcement_timer = 0.0
+                # The four survival waves are the prelude; the run is not
+                # complete until Game confirms the guardian has been defeated.
+                self.phase = self.BOSS
+                self.announcement = "BOSS ENCOUNTER"
+                self.announcement_timer = 3.5
                 self.intermission_remaining = 0.0
             else:
                 self.phase = self.INTERMISSION
