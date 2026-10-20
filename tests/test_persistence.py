@@ -91,11 +91,11 @@ def test_game_state_round_trip_including_boss_and_inventory():
         game.player.equipped_weapon = IRON_SWORD
         game.player.recalculate_attack_damage()
 
-        game.wave_manager.current_wave = 2
+        game.wave_manager.current_wave = 4
         game.wave_manager.phase = WaveManager.INTERMISSION
-        game.wave_manager.intermission_remaining = 1.25
+        game.wave_manager.intermission_remaining = 0.0
         game.wave_manager.spawn_timer = 0.4
-        game.wave_manager.announcement = "WAVE 2 CLEARED"
+        game.wave_manager.announcement = "BOSS ENCOUNTER"
         game.wave_manager.announcement_timer = 0.7
 
         enemy = game.enemies[0]
@@ -136,7 +136,7 @@ def test_game_state_round_trip_including_boss_and_inventory():
         assert game.player.inventory.get_item_count(HEALTH_POTION) == 5
         assert game.player.equipped_weapon == IRON_SWORD
         assert game.wave_manager.is_boss
-        assert game.wave_manager.current_wave == 2
+        assert game.wave_manager.current_wave == 4
         assert len(game.enemies) == 4
         assert game.enemies[0].health == 17
         assert game.enemies[0].attack_timer == 0.6
