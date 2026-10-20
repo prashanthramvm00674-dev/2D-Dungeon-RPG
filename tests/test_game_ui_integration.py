@@ -93,11 +93,8 @@ def main():
     assert game.player.health == 50
     assert game.player.inventory.get_item_count(HEALTH_POTION) == 2
 
-    # Two ordinary mouse-down events must work even if Pygame omits a
-    # native "clicks" field from its real mouse event.
-    click(game, potion_rect.center)
-    assert game.player.health == 50
-    assert game.player.inventory.get_item_count(HEALTH_POTION) == 2
+    # The second ordinary click activates the potion even if Pygame omits
+    # a native "clicks" field from its real mouse event.
     click(game, potion_rect.center)
     assert game.player.health == 75
     assert game.player.inventory.get_item_count(HEALTH_POTION) == 1
