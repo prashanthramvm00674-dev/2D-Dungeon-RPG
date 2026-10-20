@@ -15,6 +15,7 @@ from core.input import InputManager
 from core.camera import Camera
 from core.damage_number import DamageNumber
 from graphics.lighting import LightingSystem
+from graphics.post_processing import ScenePostProcessor
 
 from entities.player import Player
 from entities.enemy import Enemy
@@ -200,6 +201,14 @@ class Game:
         # ==================================================
 
         self.lighting = LightingSystem()
+
+        # ==================================================
+        # SCENE POST-PROCESSING
+        # ==================================================
+
+        # The finishing pass improves shadow detail and visual focus while
+        # leaving the pixel-art geometry and HUD artwork untouched.
+        self.post_processing = ScenePostProcessor()
 
         # ==================================================
         # HUD
@@ -1060,6 +1069,14 @@ class Game:
         for enemy in self.enemies:
             if not enemy.is_dead():
                 enemy.render_health_bar(self.screen, self.camera)
+
+        # ==================================================
+        # PHOTO-STYLE SCENE FINISHING
+        # ==================================================
+
+        # Process the world/actors only. The UI rendered below remains crisp,
+        # readable, and visually identical to the approved HUD design.
+        self.post_processing.apply(self.screen)
 
         # ==================================================
         # HUD
