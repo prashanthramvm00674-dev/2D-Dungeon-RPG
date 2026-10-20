@@ -1,5 +1,7 @@
 import pygame
 
+from ui.item_icons import draw_item_icon
+
 
 class InventoryUI:
 
@@ -28,6 +30,9 @@ class InventoryUI:
             None,
             22
         )
+        self.item_label_font = pygame.font.Font(None, 15)
+        self.quantity_font = pygame.font.Font(None, 18)
+        self.equipped_font = pygame.font.Font(None, 14)
 
     # ==================================================
     # TOGGLE
@@ -517,34 +522,8 @@ class InventoryUI:
 
                     return
 
-                item = slot["item"]
-
-                # ==================================================
-                # CONSUMABLE
-                # ==================================================
-
-                if item.item_type == "consumable":
-
-                    self.use_item(
-                        item,
-                        player,
-                        inventory
-                    )
-
-                # ==================================================
-                # EQUIPMENT
-                # ==================================================
-
-                elif (
-                    item.item_type == "weapon"
-                    or item.item_type == "armor"
-                ):
-
-                    self.equip_or_unequip(
-                        item,
-                        player
-                    )
-
+                # Selection is non-destructive. The user must choose USE or
+                # press U before consuming a potion, so browsing can't delete it.
                 return
 
         # ==================================================
@@ -576,11 +555,9 @@ class InventoryUI:
                         item.item_type == "weapon"
                         or item.item_type == "armor"
                     ):
-
-                        self.equip_or_unequip(
-                            item,
-                            player
-                        )
+                        self.equip_or_unequip(item, player)
+                    elif item.item_type == "consumable":
+                        self.use_item(item, player, inventory)
 
     # ==================================================
     # RENDER
@@ -627,15 +604,25 @@ class InventoryUI:
 
         pygame.draw.rect(
             screen,
-            (35, 35, 45),
-            panel
+            (5, 9, 14),
+            panel.inflate(8, 8)
         )
-
         pygame.draw.rect(
             screen,
-            (150, 150, 160),
+            (12, 18, 25),
+            panel
+        )
+        pygame.draw.rect(
+            screen,
+            (150, 94, 48),
             panel,
             3
+        )
+        pygame.draw.rect(
+            screen,
+            (232, 170, 82),
+            panel.inflate(-8, -8),
+            1
         )
 
         # ==================================================
@@ -697,27 +684,23 @@ class InventoryUI:
             # SELECTED
             # ==================================================
 
-            if index == self.selected_slot:
-
-                pygame.draw.rect(
-                    screen,
-                    (220, 190, 70),
-                    rect
-                )
-
-            else:
-
-                pygame.draw.rect(
-                    screen,
-                    (55, 55, 65),
-                    rect
-                )
-
             pygame.draw.rect(
                 screen,
-                (150, 150, 160),
+                (49, 41, 27) if index == self.selected_slot else (16, 25, 34),
+                rect
+            )
+            pygame.draw.rect(
+                screen,
+                (246, 190, 91) if index == self.selected_slot else (120, 83, 45),
                 rect,
                 2
+            )
+            pygame.draw.rect(
+                screen,
+                (89, 100, 105) if index == self.selected_slot else (38, 52, 63),
+                rect.inflate(-6, -6),
+                1
+            )
             )
 
             # ==================================================
@@ -734,40 +717,50 @@ class InventoryUI:
 
             quantity = slot["quantity"]
 
-            # ==================================================
-            # ITEM NAME
-            # ==================================================
-
-            item_text = self.small_font.render(
-                item.name,
-                True,
-                (255, 255, 255)
+            # Item icon is the primary visual signal; compact labels stay
+            # inside the slot at all supported display resolutions.
+            icon_rect = pygame.Rect(
+                x + 13,
+                y + 5,
+                slot_size - 26,
+                37
             )
+            draw_item_icon(screen, item, icon_rect)
 
+            label_by_name = {
+                "Health Potion": "POTION",
+                "Iron Sword": "IRON SWORD",
+                "Shield": "SHIELD",
+            }
+            label = label_by_name.get(item.name, item.name.upper())
+            item_text = self.item_label_font.render(
+                label,
+                True,
+                (232, 225, 208)
+            )
             screen.blit(
                 item_text,
                 (
-                    x + 5,
-                    y + 8
+                    rect.centerx - item_text.get_width() // 2,
+                    y + 48
                 )
             )
 
-            # ==================================================
-            # QUANTITY
-            # ==================================================
-
-            quantity_text = self.small_font.render(
+            quantity_text = self.quantity_font.render(
                 f"x{quantity}",
                 True,
-                (255, 220, 100)
+                (255, 215, 126)
             )
-
+            quantity_bg = pygame.Rect(
+                rect.right - quantity_text.get_width() - 8,
+                rect.bottom - 19,
+                quantity_text.get_width() + 5,
+                15
+            )
+            pygame.draw.rect(screen, (6, 11, 16), quantity_bg)
             screen.blit(
                 quantity_text,
-                (
-                    x + 5,
-                    y + 45
-                )
+                (quantity_bg.x + 2, quantity_bg.y - 1)
             )
 
             # ==================================================
@@ -779,20 +772,21 @@ class InventoryUI:
                 player
             ):
 
-                equipped_text = (
-                    self.small_font.render(
-                        "EQUIPPED",
-                        True,
-                        (100, 255, 120)
-                    )
+                equipped_text = self.equipped_font.render(
+                    "EQUIPPED",
+                    True,
+                    (127, 235, 135)
                 )
-
+                badge = pygame.Rect(
+                    rect.centerx - equipped_text.get_width() // 2 - 3,
+                    y - 17,
+                    equipped_text.get_width() + 6,
+                    15
+                )
+                pygame.draw.rect(screen, (7, 18, 13), badge)
                 screen.blit(
                     equipped_text,
-                    (
-                        x + 3,
-                        y - 17
-                    )
+                    (badge.x + 3, badge.y)
                 )
 
         # ==================================================
@@ -936,9 +930,9 @@ class InventoryUI:
         # ==================================================
 
         controls_text = self.small_font.render(
-            "ARROWS SELECT   U USE   E EQUIP",
+            "CLICK / ARROWS SELECT    U USE    E EQUIP    I / ESC CLOSE",
             True,
-            (180, 180, 180)
+            (198, 177, 139)
         )
 
         screen.blit(
