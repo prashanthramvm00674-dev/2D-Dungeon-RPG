@@ -7,8 +7,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from core.camera import Camera
+from core.game import Game
 from entities.enemy import Enemy
+from entities.item import HEALTH_POTION, IRON_SWORD, SHIELD
 from entities.player import Player
+from ui.inventory_ui import InventoryUI
 from graphics.lighting import LightingSystem
 from ui.hud import HUD
 from world.world import World
@@ -19,6 +22,9 @@ def main():
     screen = pygame.display.set_mode((1280, 720))
 
     world = World()
+    rubble = world.dungeon_textures.get_void_tile(7)
+    assert rubble.get_size() == (World.TILE_SIZE, World.TILE_SIZE)
+    assert world.dungeon_textures.get_void_tile(7) is rubble
     player = Player()
     player_x, player_y = world.get_center_spawn_position()
     player.rect.topleft = (player_x, player_y)
@@ -26,6 +32,9 @@ def main():
     player.health = 73
     player.xp = 38
     player.is_attacking = True
+    player.inventory.add_item(HEALTH_POTION, 3)
+    player.inventory.add_item(IRON_SWORD, 1)
+    player.inventory.add_item(SHIELD, 1)
 
     enemy_positions = world.get_edge_spawn_positions(
         1,
@@ -54,8 +63,15 @@ def main():
     enemy.render_health_bar(screen, camera)
 
     hud = HUD()
-    hud.render(screen, player, [enemy])
+    hud.render(screen, player, [enemy], player.inventory)
+    assert len(hud.hotbar_rects) == 5
+    assert hud.hotbar_slot_at(hud.hotbar_rects[0].center) == 0
     assert hud.menu_button_rect.width > 0
+
+    # Importing Game above also syntax-checks the full event/menu integration.
+    inventory_ui = InventoryUI()
+    inventory_ui.toggle()
+    inventory_ui.render(screen, player.inventory, player)
     assert hud.menu_button_contains(hud.menu_button_rect.center)
     assert screen.get_size() == (1280, 720)
 
