@@ -71,7 +71,7 @@ def test_final_wave_starts_boss_and_requires_guardian_defeat():
     assert manager.phase == WaveManager.BOSS
     assert not manager.is_victory
     assert manager.remaining_count(0) == 1
-    assert not manager.defeat_boss() is False
+    assert manager.defeat_boss()
     assert manager.is_victory
     assert manager.phase == WaveManager.VICTORY
     assert manager.remaining_count(0) == 0
