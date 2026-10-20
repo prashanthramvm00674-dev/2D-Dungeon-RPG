@@ -127,12 +127,22 @@ def main():
     game.update()
     assert sum(not enemy.is_dead() for enemy in game.enemies) == 1
     assert len(game.wave_manager.pending_enemy_types) == 4
+    spawned_enemy = next(enemy for enemy in game.enemies if not enemy.is_dead())
+    assert not game.world.collides_with_wall(spawned_enemy.rect)
 
     # Restart returns to the four-enemy opening wave and fresh inventory.
     game.restart()
     assert game.wave_manager.current_wave == 1
     assert len(game.enemies) == 4
     assert game.player.inventory.get_item_count(HEALTH_POTION) == 3
+
+    # Victory presentation is renderable and R starts a fresh wave run.
+    game.wave_manager.phase = game.wave_manager.VICTORY
+    game.render()
+    press(game, pygame.K_r)
+    assert game.wave_manager.current_wave == 1
+    assert not game.wave_manager.is_victory
+    assert len(game.enemies) == 4
 
     pygame.quit()
     print(
