@@ -274,12 +274,18 @@ class HUD:
                 (tick_x, inner.bottom - 1), 1
             )
 
-    def render(self, screen, player, enemies, inventory=None):
+    def render(self, screen, player, enemies, inventory=None, wave_manager=None):
         width, height = screen.get_size()
         scale = max(0.65, min(1.0, width / 1600, height / 900))
         u = lambda value: max(1, int(value * scale))
 
         alive_enemies = sum(not enemy.is_dead() for enemy in enemies)
+        enemies_remaining = (
+            wave_manager.remaining_count(alive_enemies)
+            if wave_manager is not None else alive_enemies
+        )
+        wave_number = wave_manager.current_wave if wave_manager is not None else 1
+        total_waves = wave_manager.total_waves if wave_manager is not None else 4
 
         # --------------------------------------------------
         # TOP LEFT: WAVE / ENEMY COUNT / EMBLEM
@@ -294,10 +300,10 @@ class HUD:
         self._draw_skull_badge(screen, badge_rect)
 
         wave = self._font(u(20), bold=True).render(
-            "WAVE 1 / 4", True, self.GOLD
+            f"WAVE {wave_number} / {total_waves}", True, self.GOLD
         )
         enemies_label = self._font(u(15)).render(
-            f"ENEMIES: {alive_enemies}", True, self.TEXT
+            f"ENEMIES: {enemies_remaining}", True, self.TEXT
         )
         screen.blit(wave, (info_rect.x + u(61), info_rect.y + u(13)))
         screen.blit(

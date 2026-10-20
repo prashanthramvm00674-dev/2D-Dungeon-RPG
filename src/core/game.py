@@ -13,6 +13,7 @@ from core.settings import (
 
 from core.input import InputManager
 from core.camera import Camera
+from core.wave_manager import WaveManager
 from core.damage_number import DamageNumber
 from graphics.lighting import LightingSystem
 from graphics.post_processing import ScenePostProcessor
@@ -160,9 +161,11 @@ class Game:
         # ENEMIES
         # ==================================================
 
-        # Spawn enemies at separated safe positions near the map edges.
+        # The opening roster preserves the existing encounter while the
+        # WaveManager owns all subsequent progression and spawn queues.
+        self.wave_manager = WaveManager()
         self.enemies = []
-        enemy_types = ["Goblin", "Skeleton", "Orc", "Goblin"]
+        enemy_types = self.wave_manager.initial_roster
         enemy_positions = self.world.get_edge_spawn_positions(
             len(enemy_types),
             avoid_positions=[(spawn_x, spawn_y)]
@@ -302,6 +305,9 @@ class Game:
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
+                    if self.wave_manager.is_victory:
+                        continue
+
                     mouse_position = normalize_mouse_position(
                         event.pos,
                         self.screen.get_size()
@@ -365,6 +371,17 @@ class Game:
                 ):
                     # F11 and Alt+Enter share the same tested toggle path.
                     self.toggle_fullscreen()
+                    continue
+
+                # ==================================================
+                # WAVE VICTORY
+                # ==================================================
+
+                if self.wave_manager.is_victory:
+                    if event.key == pygame.K_r:
+                        self.restart()
+                    elif event.key == pygame.K_ESCAPE:
+                        self.running = False
                     continue
 
                 # ==================================================
@@ -514,7 +531,7 @@ class Game:
         # GAME OVER
         # ==================================================
 
-        if self.player.is_dead:
+        if self.player.is_dead or self.wave_manager.is_victory:
 
             return
 
@@ -666,6 +683,17 @@ class Game:
         ]
 
         # ==================================================
+        # WAVES
+        # ==================================================
+
+        alive_count = sum(not enemy.is_dead() for enemy in self.enemies)
+        self.wave_manager.update(
+            self.dt,
+            alive_count,
+            self._spawn_wave_enemy,
+        )
+
+        # ==================================================
         # CAMERA
         # ==================================================
 
@@ -675,6 +703,26 @@ class Game:
             self.world.get_height(),
             *self.screen.get_size()
         )
+
+    def _spawn_wave_enemy(self, enemy_type, spawn_index):
+        """Spawn one reinforcement on safe floor away from current actors."""
+        avoid_positions = [(self.player.rect.x, self.player.rect.y)]
+        avoid_positions.extend(
+            (enemy.rect.x, enemy.rect.y)
+            for enemy in self.enemies
+            if not enemy.is_dead()
+        )
+        positions = self.world.get_edge_spawn_positions(
+            1,
+            avoid_positions=avoid_positions,
+            start_index=spawn_index,
+        )
+        if not positions:
+            return False
+
+        enemy_x, enemy_y = positions[0]
+        self.enemies.append(Enemy(enemy_x, enemy_y, enemy_type))
+        return True
 
     # ======================================================
     # RESTART
@@ -718,9 +766,10 @@ class Game:
         # RESET ENEMIES
         # ==================================================
 
-        # Spawn enemies at separated safe positions near the map edges.
+        # Reset the entire wave run alongside the player and inventory.
+        self.wave_manager = WaveManager()
         self.enemies = []
-        enemy_types = ["Goblin", "Skeleton", "Orc", "Goblin"]
+        enemy_types = self.wave_manager.initial_roster
         enemy_positions = self.world.get_edge_spawn_positions(
             len(enemy_types),
             avoid_positions=[(spawn_x, spawn_y)]
@@ -969,6 +1018,82 @@ class Game:
             )
         )
 
+    def render_wave_status(self):
+        """Draw a short center-screen announcement without changing the HUD."""
+        if self.wave_manager.is_victory or self.player.is_dead:
+            return
+
+        message = self.wave_manager.announcement
+        if self.wave_manager.announcement_timer <= 0.0:
+            if self.wave_manager.is_intermission:
+                seconds = max(1, int(self.wave_manager.intermission_remaining + 0.999))
+                message = f"NEXT WAVE IN {seconds}"
+            else:
+                return
+
+        if not message:
+            return
+
+        width, height = self.screen.get_size()
+        panel_width = min(560, width - 32)
+        panel_height = 62
+        panel = pygame.Rect(
+            (width - panel_width) // 2,
+            max(105, int(height * 0.27)),
+            panel_width,
+            panel_height,
+        )
+        overlay = pygame.Surface(panel.size, pygame.SRCALPHA)
+        overlay.fill((5, 10, 16, 218))
+        self.screen.blit(overlay, panel.topleft)
+        pygame.draw.rect(self.screen, (104, 64, 35), panel, 2)
+        pygame.draw.rect(self.screen, (208, 145, 65), panel.inflate(-6, -6), 1)
+
+        label = self.pause_small_font.render(
+            message, True, (255, 203, 112)
+        )
+        self.screen.blit(
+            label,
+            (panel.centerx - label.get_width() // 2,
+             panel.centery - label.get_height() // 2),
+        )
+
+    def render_victory(self):
+        """Show the completed four-wave run and familiar restart/exit keys."""
+        width, height = self.screen.get_size()
+        overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+        overlay.fill((2, 4, 7, 205))
+        self.screen.blit(overlay, (0, 0))
+
+        title = self.game_over_font.render(
+            "DUNGEON CLEARED", True, (255, 203, 112)
+        )
+        subtitle = self.game_over_small_font.render(
+            f"ALL {self.wave_manager.total_waves} WAVES DEFEATED",
+            True, (231, 225, 210)
+        )
+        restart_text = self.game_over_small_font.render(
+            "R  -  RESTART", True, (255, 255, 255)
+        )
+        quit_text = self.game_over_small_font.render(
+            "ESC  -  QUIT", True, (255, 255, 255)
+        )
+
+        center_x = width // 2
+        center_y = height // 2
+        self.screen.blit(
+            title, (center_x - title.get_width() // 2, center_y - 105)
+        )
+        self.screen.blit(
+            subtitle, (center_x - subtitle.get_width() // 2, center_y - 35)
+        )
+        self.screen.blit(
+            restart_text, (center_x - restart_text.get_width() // 2, center_y + 30)
+        )
+        self.screen.blit(
+            quit_text, (center_x - quit_text.get_width() // 2, center_y + 72)
+        )
+
     # ======================================================
     # RENDER
     # ======================================================
@@ -1086,8 +1211,11 @@ class Game:
             self.screen,
             self.player,
             self.enemies,
-            self.player.inventory
+            self.player.inventory,
+            self.wave_manager,
         )
+
+        self.render_wave_status()
 
         # ==================================================
         # INVENTORY UI
@@ -1114,6 +1242,9 @@ class Game:
         if self.player.is_dead:
 
             self.render_game_over()
+
+        if self.wave_manager.is_victory:
+            self.render_victory()
 
         # ==================================================
         # DISPLAY

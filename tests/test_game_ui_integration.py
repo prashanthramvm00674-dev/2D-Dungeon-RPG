@@ -43,6 +43,8 @@ def main():
     # Populate the HUD hitboxes first, just like the real first frame.
     game.render()
     assert game.player.inventory.get_item_count(HEALTH_POTION) == 3
+    assert game.wave_manager.current_wave == 1
+    assert len(game.enemies) == len(game.wave_manager.initial_roster) == 4
 
     # The top-right button opens a pause menu, not the inventory overlay.
     click(game, game.hud.menu_button_rect.center)
@@ -73,6 +75,8 @@ def main():
     assert not game.paused
     assert not game.inventory_ui.visible
     assert game.player.inventory.get_item_count(HEALTH_POTION) == 3
+    assert game.wave_manager.current_wave == 1
+    assert not game.wave_manager.is_victory
 
     # The numbered HUD slot is connected to the inventory and uses one potion.
     game.render()
@@ -102,6 +106,43 @@ def main():
     # I closes it too, retaining the user's existing keyboard shortcut.
     press(game, pygame.K_i)
     assert not game.inventory_ui.visible
+
+    # A wave ends only after every living enemy is defeated. The next wave
+    # waits through its intermission, then queues/spawns reinforcements.
+    for enemy in game.enemies:
+        if not enemy.is_dead():
+            enemy.take_damage(enemy.health + 1)
+    game.dt = 0.016
+    game.update()
+    assert game.wave_manager.is_intermission
+    assert game.wave_manager.current_wave == 1
+
+    game.dt = game.wave_manager.intermission_duration + 0.1
+    game.update()
+    assert game.wave_manager.current_wave == 2
+    assert not game.wave_manager.is_intermission
+    assert len(game.wave_manager.pending_enemy_types) == 5
+
+    game.dt = 0.016
+    game.update()
+    assert sum(not enemy.is_dead() for enemy in game.enemies) == 1
+    assert len(game.wave_manager.pending_enemy_types) == 4
+    spawned_enemy = next(enemy for enemy in game.enemies if not enemy.is_dead())
+    assert not game.world.collides_with_wall(spawned_enemy.rect)
+
+    # Restart returns to the four-enemy opening wave and fresh inventory.
+    game.restart()
+    assert game.wave_manager.current_wave == 1
+    assert len(game.enemies) == 4
+    assert game.player.inventory.get_item_count(HEALTH_POTION) == 3
+
+    # Victory presentation is renderable and R starts a fresh wave run.
+    game.wave_manager.phase = game.wave_manager.VICTORY
+    game.render()
+    press(game, pygame.K_r)
+    assert game.wave_manager.current_wave == 1
+    assert not game.wave_manager.is_victory
+    assert len(game.enemies) == 4
 
     pygame.quit()
     print(
