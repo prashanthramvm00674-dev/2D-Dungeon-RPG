@@ -43,6 +43,15 @@ def main():
     assert first.get_at((0, 0)).a > first.get_at((80, 45)).a
     assert resized.get_size() == (320, 180)
 
+    # Exercise the resolution captured in the gameplay video too. This checks
+    # high-resolution overlay generation and blending without a physical display.
+    fullscreen_like = pygame.Surface((1920, 1008))
+    fullscreen_like.fill((16, 20, 28))
+    processor.apply(fullscreen_like)
+    large_center = fullscreen_like.get_at((960, 504))
+    assert large_center.r > 16 and large_center.g > 20 and large_center.b > 28
+    assert processor._build_overlay((1920, 1008)).get_size() == (1920, 1008)
+
     pygame.quit()
     print(
         "Post-processing checks passed: lifted shadows, retained warm "
