@@ -174,14 +174,75 @@ def test_invalid_game_payload_does_not_mutate_live_state():
         pygame.quit()
 
 
+def test_pause_menu_save_load_and_settings_controls():
+    with tempfile.TemporaryDirectory() as directory:
+        pygame.init()
+        game = Game()
+        game.save_manager = SaveManager(Path(directory) / "slot.json")
+        settings_path = Path(directory) / "settings.json"
+        game.settings_manager = SettingsManager(settings_path)
+        game.settings_manager.load()
+
+        def click(position):
+            pygame.event.post(
+                pygame.event.Event(
+                    pygame.MOUSEBUTTONDOWN,
+                    {"button": 1, "pos": position},
+                )
+            )
+            game.handle_events()
+
+        def press(key):
+            pygame.event.post(
+                pygame.event.Event(
+                    pygame.KEYDOWN,
+                    {"key": key, "mod": 0},
+                )
+            )
+            game.handle_events()
+
+        game.render()
+        click(game.hud.menu_button_rect.center)
+        assert game.paused
+        game.render()
+        assert {"save", "load", "settings"} <= set(game.pause_menu_buttons)
+
+        click(game.pause_menu_buttons["settings"].center)
+        assert game.settings_menu_visible
+        game.render()
+        original_lighting = game.settings_manager.values["lighting_enabled"]
+        click(game.settings_buttons["lighting_enabled"].center)
+        assert game.settings_manager.values["lighting_enabled"] is not original_lighting
+        assert SettingsManager(settings_path).load()["lighting_enabled"] is not original_lighting
+
+        game.render()
+        click(game.settings_buttons["back"].center)
+        assert not game.settings_menu_visible
+        assert game.paused
+
+        game.render()
+        click(game.pause_menu_buttons["save"].center)
+        assert game.save_manager.exists()
+        assert "saved" in game.persistence_status.lower()
+
+        saved_health = game.player.health
+        game.player.health = max(1, saved_health - 40)
+        press(pygame.K_F9)
+        assert game.player.health == saved_health
+        assert not game.paused
+        pygame.quit()
+
+
 def main():
     test_save_manager_atomic_round_trip_and_validation()
     test_settings_persist_and_recover_from_corruption()
     test_game_state_round_trip_including_boss_and_inventory()
     test_invalid_game_payload_does_not_mutate_live_state()
+    test_pause_menu_save_load_and_settings_controls()
     print(
         "Persistence tests passed: atomic saves, corrupt-file recovery, "
-        "settings, full run round-trip, and safe rejection of invalid state."
+        "full run and boss round-trip, pause-menu save/load, live settings, "
+        "and safe rejection of invalid state."
     )
 
 
