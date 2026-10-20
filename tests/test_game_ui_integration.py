@@ -199,11 +199,59 @@ def main():
     assert len(game.enemies) == 4
     assert game.quest_manager.status == "active"
     assert not game.quest_ui.visible
+    assert game.boss is None
+
+    # Clearing the final wave starts a real boss phase instead of declaring
+    # victory immediately. The guardian must spawn, take combat damage, and die.
+    game.wave_manager.current_wave = game.wave_manager.total_waves
+    game.wave_manager.phase = game.wave_manager.ACTIVE
+    game.wave_manager.pending_enemy_types = []
+    for enemy in game.enemies:
+        if not enemy.is_dead():
+            enemy.take_damage(enemy.health + 1)
+
+    game.dt = 0.016
+    game.update()
+    assert game.wave_manager.is_boss
+    assert not game.wave_manager.is_victory
+    assert game.boss is None
+
+    game.update()
+    assert game.boss is not None
+    assert not game.boss.is_dead()
+    assert not game.world.collides_with_wall(game.boss.rect)
+    game.render()
+
+    # Exercise the same boss hit/reward/victory path used by the player's
+    # existing attack loop without relying on timing-dependent key presses.
+    game.boss.health = game.player.attack_damage
+    game.boss.state = "recover"
+    game.boss.state_timer = 2.0
+
+    def force_boss_hit(_input_manager, _dt, _world):
+        game.player.is_attacking = True
+        game.player.attack_has_hit = False
+        game.player.attack_rect = game.boss.rect.copy()
+
+    game.player.update = force_boss_hit
+    game.update()
+    assert game.boss.is_dead()
+    assert game.wave_manager.is_victory
+    assert game.quest_manager.completed
+    assert game.quest_manager.reward_claimed
+    assert len(game.loot) >= 1
+    game.render()
+
+    press(game, pygame.K_r)
+    assert not game.wave_manager.is_boss
+    assert not game.wave_manager.is_victory
+    assert game.boss is None
+    assert game.quest_manager.status == "active"
 
     pygame.quit()
     print(
-        "Game UI integration passed: pause menu, restart, hotbar, mouse "
-        "inventory selection/double-click use, and I-key toggle."
+        "Game UI integration passed: pause menu, inventory/hotbar, dialogue, "
+        "waves, boss phase, boss rewards, victory, and restart."
     )
 
 

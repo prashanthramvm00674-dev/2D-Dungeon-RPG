@@ -39,6 +39,17 @@ def test_quest_stays_active_until_victory():
     assert not quest.completed
 
 
+def test_quest_stays_active_during_boss_encounter():
+    quest = QuestManager()
+    waves = FakeWaves()
+    player = FakePlayer()
+    waves.is_boss = True
+
+    assert not quest.update(waves, 0, player)
+    assert not quest.completed
+    assert player.xp_awarded == 0
+
+
 def test_quest_awards_xp_once_on_victory():
     quest = QuestManager()
     waves = FakeWaves()
@@ -81,10 +92,11 @@ def test_progress_includes_queued_enemies_and_reward():
 
 def main():
     test_quest_stays_active_until_victory()
+    test_quest_stays_active_during_boss_encounter()
     test_quest_awards_xp_once_on_victory()
     test_player_death_does_not_complete_quest()
     test_progress_includes_queued_enemies_and_reward()
-    print("Quest manager tests passed: progression, death handling, and one-time reward.")
+    print("Quest manager tests passed: wave/boss gating, death handling, and one-time reward.")
 
 
 if __name__ == "__main__":

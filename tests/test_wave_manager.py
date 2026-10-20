@@ -64,9 +64,14 @@ def test_queued_enemies_count_as_remaining():
     assert manager.remaining_count(2) == 5
 
 
-def test_final_wave_completes_in_victory_state():
+def test_final_wave_starts_boss_and_requires_guardian_defeat():
     manager = WaveManager(wave_rosters=(("Goblin",),))
     manager.update(0.016, 0, lambda kind, index: None)
+    assert manager.is_boss
+    assert manager.phase == WaveManager.BOSS
+    assert not manager.is_victory
+    assert manager.remaining_count(0) == 1
+    assert manager.defeat_boss()
     assert manager.is_victory
     assert manager.phase == WaveManager.VICTORY
     assert manager.remaining_count(0) == 0
@@ -94,11 +99,11 @@ def main():
     test_rosters_and_opening_state()
     test_wave_waits_for_living_and_queued_enemies()
     test_queued_enemies_count_as_remaining()
-    test_final_wave_completes_in_victory_state()
+    test_final_wave_starts_boss_and_requires_guardian_defeat()
     test_each_spawn_callback_receives_progressive_index()
     print(
         "Wave manager tests passed: rosters, spawn cap, timing, transitions, "
-        "queue counts, spawn indices, and victory."
+        "queue counts, spawn indices, boss gating, and victory."
     )
 
 

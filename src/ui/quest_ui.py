@@ -99,6 +99,9 @@ class QuestJournalUI:
         if snapshot["completed"]:
             footer_text = "The dungeon is clear. Your reward has been granted."
             footer_color = self.GREEN
+        elif wave_manager.is_boss:
+            footer_text = "Defeat the Ashen Titan to complete this quest."
+            footer_color = self.GOLD
         else:
             footer_text = "Finish the remaining waves to complete this quest."
             footer_color = self.MUTED

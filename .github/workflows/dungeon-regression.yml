@@ -2,7 +2,7 @@ name: Dungeon regression checks
 
 on:
   push:
-    branches: [main, feature/enemy-waves, feature/dungeon-quest, feature/ashen-warden-dialogue]
+    branches: [main, feature/enemy-waves, feature/dungeon-quest, feature/ashen-warden-dialogue, feature/dungeon-boss-encounter]
   workflow_dispatch:
 
 permissions:
@@ -46,8 +46,11 @@ jobs:
       - name: Test dropped potion bottle rendering
         run: python tests/test_loot_rendering.py
 
-      - name: Test four-wave state machine
+      - name: Test four-wave and boss state machine
         run: python tests/test_wave_manager.py
+
+      - name: Test Ashen Titan combat and rendering
+        run: python tests/test_boss_encounter.py
 
       - name: Test dungeon quest progression and reward
         run: python tests/test_quest_manager.py
