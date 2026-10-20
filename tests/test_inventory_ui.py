@@ -49,14 +49,22 @@ def main():
     assert player.health == 75
     assert inventory.get_item_count(HEALTH_POTION) == 2
 
-    # Double-clicking an item also activates it, using the same item action.
+    # Two separate, ordinary clicks activate an item even when the platform
+    # does not include a click-count field in Pygame's event.
     player.health = 50
     assert ui.handle_click(
         potion_rect.center,
         inventory,
         player,
-        screen.get_size(),
-        click_count=2
+        screen.get_size()
+    )
+    assert player.health == 50
+    assert inventory.get_item_count(HEALTH_POTION) == 2
+    assert ui.handle_click(
+        potion_rect.center,
+        inventory,
+        player,
+        screen.get_size()
     )
     assert player.health == 75
     assert inventory.get_item_count(HEALTH_POTION) == 1
