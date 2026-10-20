@@ -1013,17 +1013,6 @@ class Game:
             )
 
         # ==================================================
-        # LOOT
-        # ==================================================
-
-        for loot in self.loot:
-
-            loot.render(
-                self.screen,
-                self.camera
-            )
-
-        # ==================================================
         # PLAYER
         # ==================================================
 
@@ -1059,6 +1048,15 @@ class Game:
         # Re-draw flame silhouettes after the ambient pass so the fire remains
         # a crisp, bright focal point; keep enemy health bars similarly legible.
         self.world.render_torches(self.screen, self.camera)
+
+        # Potions are drawn after ambient shading so the bottle silhouette
+        # remains distinct enough to spot and collect in the dark dungeon.
+        for loot in self.loot:
+            loot.render(
+                self.screen,
+                self.camera
+            )
+
         for enemy in self.enemies:
             if not enemy.is_dead():
                 enemy.render_health_bar(self.screen, self.camera)
