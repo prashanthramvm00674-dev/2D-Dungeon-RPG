@@ -35,9 +35,9 @@ class Game:
 
         pygame.init()
 
-        # Start fullscreen using the actual desktop resolution. The camera
-        # uses the resulting display size, while F11 lets the player switch
-        # back to a resizable window.
+        # Start in a normal resizable window so desktop tools such as
+        # Windows Snipping Tool can capture the game reliably. F11 still
+        # switches between this window and fullscreen during play.
         display_info = pygame.display.Info()
         self.desktop_size = (
             display_info.current_w or SCREEN_WIDTH,
@@ -60,11 +60,11 @@ class Game:
             int(window_width / aspect_ratio)
         )
         self.windowed_size = (window_width, window_height)
-        self.fullscreen = True
+        self.fullscreen = False
 
         self.screen = pygame.display.set_mode(
-            self.desktop_size,
-            pygame.FULLSCREEN
+            self.windowed_size,
+            pygame.RESIZABLE
         )
 
         pygame.display.set_caption(
