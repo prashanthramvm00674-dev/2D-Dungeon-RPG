@@ -134,7 +134,7 @@ class World:
         """Backward-compatible alias for the safe central spawn."""
         return self.get_center_spawn_position()
 
-    def get_edge_spawn_positions(self, count, avoid_positions=None):
+    def get_edge_spawn_positions(self, count, avoid_positions=None, start_index=0):
         """
         Return separated, safe enemy positions near the dungeon's edges.
 
@@ -184,7 +184,7 @@ class World:
         selected = []
 
         for index in range(count):
-            target = targets[index % len(targets)]
+            target = targets[(index + max(0, int(start_index))) % len(targets)]
             target_left = target[0] < self.columns // 2
             target_top = target[1] < self.rows // 2
 
