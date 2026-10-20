@@ -1,5 +1,7 @@
 import ctypes
+import math
 import sys
+from datetime import datetime, timezone
 
 import pygame
 
@@ -16,6 +18,7 @@ from core.camera import Camera
 from core.wave_manager import WaveManager
 from core.quest_manager import QuestManager
 from core.damage_number import DamageNumber
+from core.save_manager import SAVE_SCHEMA_VERSION, SaveManager, SettingsManager
 from graphics.lighting import LightingSystem
 from graphics.post_processing import ScenePostProcessor
 
@@ -29,6 +32,12 @@ from entities.item import (
     IRON_SWORD,
     SHIELD,
 )
+
+ITEMS_BY_NAME = {
+    item.name: item
+    for item in (HEALTH_POTION, IRON_SWORD, SHIELD)
+}
+VALID_ENEMY_TYPES = {"Goblin", "Skeleton", "Orc"}
 
 from entities.loot import Loot
 
@@ -79,6 +88,15 @@ class Game:
 
         pygame.init()
 
+        # Preferences and save slots use a stable path independent of the
+        # directory from which the game process was launched.
+        self.settings_manager = SettingsManager()
+        self.settings_manager.load()
+        self.save_manager = SaveManager()
+        self.persistence_status = ""
+        self.settings_menu_visible = False
+        self.settings_buttons = {}
+
         # Start in a normal resizable window so desktop tools such as
         # Windows Snipping Tool can capture the game reliably. F11 still
         # switches between this window and fullscreen during play.
@@ -104,12 +122,18 @@ class Game:
             int(window_width / aspect_ratio)
         )
         self.windowed_size = (window_width, window_height)
-        self.fullscreen = False
+        self.fullscreen = self.settings_manager.values["start_fullscreen"]
 
-        self.screen = pygame.display.set_mode(
-            self.windowed_size,
-            pygame.RESIZABLE
-        )
+        if self.fullscreen:
+            self.screen = pygame.display.set_mode(
+                self.desktop_size,
+                pygame.FULLSCREEN
+            )
+        else:
+            self.screen = pygame.display.set_mode(
+                self.windowed_size,
+                pygame.RESIZABLE
+            )
 
         pygame.display.set_caption(
             WINDOW_TITLE
@@ -332,8 +356,22 @@ class Game:
                     )
 
                     if self.paused:
-                        # Click targets are drawn in surface pixels, so use
-                        # the same coordinate space as their hitboxes.
+                        # Settings is modal above the pause menu. Its toggles
+                        # save immediately, so values survive a later restart.
+                        if self.settings_menu_visible:
+                            buttons = self.settings_buttons
+                            if buttons.get("start_fullscreen", pygame.Rect(0, 0, 0, 0)).collidepoint(mouse_position):
+                                self._toggle_setting("start_fullscreen")
+                            elif buttons.get("lighting_enabled", pygame.Rect(0, 0, 0, 0)).collidepoint(mouse_position):
+                                self._toggle_setting("lighting_enabled")
+                            elif buttons.get("post_processing_enabled", pygame.Rect(0, 0, 0, 0)).collidepoint(mouse_position):
+                                self._toggle_setting("post_processing_enabled")
+                            elif buttons.get("autosave_on_quit", pygame.Rect(0, 0, 0, 0)).collidepoint(mouse_position):
+                                self._toggle_setting("autosave_on_quit")
+                            elif buttons.get("back", pygame.Rect(0, 0, 0, 0)).collidepoint(mouse_position):
+                                self.settings_menu_visible = False
+                            continue
+
                         buttons = self.pause_menu_buttons
                         if buttons.get("resume", pygame.Rect(0, 0, 0, 0)).collidepoint(mouse_position):
                             self.paused = False
@@ -343,6 +381,12 @@ class Game:
                             self.running = False
                         elif buttons.get("fullscreen", pygame.Rect(0, 0, 0, 0)).collidepoint(mouse_position):
                             self.toggle_fullscreen()
+                        elif buttons.get("save", pygame.Rect(0, 0, 0, 0)).collidepoint(mouse_position):
+                            self.save_game()
+                        elif buttons.get("load", pygame.Rect(0, 0, 0, 0)).collidepoint(mouse_position):
+                            self.load_game()
+                        elif buttons.get("settings", pygame.Rect(0, 0, 0, 0)).collidepoint(mouse_position):
+                            self.settings_menu_visible = True
                         continue
 
                     if not self.player.is_dead:
@@ -399,6 +443,18 @@ class Game:
                 ):
                     # F11 and Alt+Enter share the same tested toggle path.
                     self.toggle_fullscreen()
+                    continue
+
+                # ==================================================
+                # QUICK SAVE / LOAD
+                # ==================================================
+
+                if event.key == pygame.K_F5:
+                    self.save_game()
+                    continue
+
+                if event.key == pygame.K_F9:
+                    self.load_game()
                     continue
 
                 # ==================================================
@@ -481,7 +537,10 @@ class Game:
                 # ==================================================
 
                 if self.paused:
-                    if event.key in (pygame.K_ESCAPE, pygame.K_RETURN):
+                    if self.settings_menu_visible:
+                        if event.key in (pygame.K_ESCAPE, pygame.K_RETURN):
+                            self.settings_menu_visible = False
+                    elif event.key in (pygame.K_ESCAPE, pygame.K_RETURN):
                         self.paused = False
                     elif event.key == pygame.K_r:
                         self.restart()
@@ -543,6 +602,419 @@ class Game:
                 }
                 if event.key in hotkey_slots:
                     self.activate_hotbar_slot(hotkey_slots[event.key])
+
+    def _toggle_setting(self, key):
+        """Toggle a supported option and persist it immediately."""
+        try:
+            success = self.settings_manager.toggle(key)
+        except (KeyError, ValueError):
+            success = False
+
+        if success:
+            setting_label = key.replace("_", " ").title()
+            self.persistence_status = f"{setting_label} saved."
+        else:
+            self.persistence_status = (
+                "Settings could not be saved: " + self.settings_manager.last_error
+            )
+        return success
+
+    @staticmethod
+    def _save_item_name(item):
+        return None if item is None else item.name
+
+    def _serialize_game_state(self):
+        """Capture gameplay state only; graphics caches and transient UI stay local."""
+        player = self.player
+        wave = self.wave_manager
+        boss = self.boss
+
+        return {
+            "player": {
+                "x": int(player.rect.x),
+                "y": int(player.rect.y),
+                "health": int(player.health),
+                "max_health": int(player.max_health),
+                "base_max_health": int(player.base_max_health),
+                "level": int(player.level),
+                "xp": int(player.xp),
+                "xp_to_next_level": int(player.xp_to_next_level),
+                "base_attack_damage": int(player.base_attack_damage),
+                "direction": player.direction,
+                "damage_cooldown": float(player.damage_cooldown),
+                "hit_flash_timer": float(player.hit_flash_timer),
+                "is_attacking": bool(player.is_attacking),
+                "attack_timer": float(player.attack_timer),
+                "attack_cooldown_timer": float(player.attack_cooldown_timer),
+                "attack_has_hit": bool(player.attack_has_hit),
+                "inventory": [
+                    None if slot is None else {
+                        "item": slot["item"].name,
+                        "quantity": int(slot["quantity"]),
+                    }
+                    for slot in player.inventory.slots
+                ],
+                "equipment": {
+                    "weapon": self._save_item_name(player.equipped_weapon),
+                    "shield": self._save_item_name(player.equipped_shield),
+                    "armor": self._save_item_name(player.equipped_armor),
+                },
+            },
+            "wave": {
+                "current_wave": int(wave.current_wave),
+                "phase": wave.phase,
+                "pending_enemy_types": list(wave.pending_enemy_types),
+                "spawn_timer": float(wave.spawn_timer),
+                "intermission_remaining": float(wave.intermission_remaining),
+                "announcement": wave.announcement,
+                "announcement_timer": float(wave.announcement_timer),
+                "spawned_this_wave": int(wave.spawned_this_wave),
+                "total_spawned": int(wave.total_spawned),
+            },
+            "enemies": [
+                {
+                    "type": enemy.enemy_type,
+                    "x": int(enemy.rect.x),
+                    "y": int(enemy.rect.y),
+                    "health": int(enemy.health),
+                    "attack_timer": float(enemy.attack_timer),
+                    "hit_flash_timer": float(enemy.hit_flash_timer),
+                }
+                for enemy in self.enemies
+            ],
+            "boss": None if boss is None else {
+                "x": int(boss.rect.x),
+                "y": int(boss.rect.y),
+                "health": int(boss.health),
+                "state": boss.state,
+                "state_timer": float(boss.state_timer),
+                "attack_cooldown": float(boss.attack_cooldown),
+                "special_cooldown": float(boss.special_cooldown),
+                "hit_flash_timer": float(boss.hit_flash_timer),
+                "telegraph_position": (
+                    list(boss.telegraph_position)
+                    if boss.telegraph_position is not None else None
+                ),
+            },
+            "loot": [
+                {
+                    "x": int(drop.rect.x),
+                    "y": int(drop.rect.y),
+                    "item": drop.item.name,
+                }
+                for drop in self.loot
+                if not drop.is_collected
+            ],
+            "quest": {
+                "completed": bool(self.quest_manager.completed),
+                "reward_claimed": bool(self.quest_manager.reward_claimed),
+            },
+        }
+
+    def save_game(self):
+        """Write a complete run snapshot into the atomic manual/auto-save slot."""
+        payload = {
+            "schema_version": SAVE_SCHEMA_VERSION,
+            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "game": self._serialize_game_state(),
+        }
+        if self.save_manager.save(payload):
+            self.persistence_status = "Game saved successfully."
+            return True
+
+        self.persistence_status = "Save failed: " + self.save_manager.last_error
+        return False
+
+    def _restore_game_state(self, data):
+        """Build and validate replacement objects before mutating the running game."""
+        if not isinstance(data, dict):
+            raise ValueError("Saved game data is not an object.")
+
+        def number(source, key, minimum, maximum, integer=False, default=None):
+            if not isinstance(source, dict):
+                raise ValueError("A saved state section is invalid.")
+            value = source.get(key, default)
+            if value is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(f"Saved field '{key}' is missing or not numeric.")
+            if not math.isfinite(float(value)) or value < minimum or value > maximum:
+                raise ValueError(f"Saved field '{key}' is outside its allowed range.")
+            if integer and int(value) != value:
+                raise ValueError(f"Saved field '{key}' must be an integer.")
+            return int(value) if integer else float(value)
+
+        def flag(source, key, default=None):
+            value = source.get(key, default) if isinstance(source, dict) else None
+            if type(value) is not bool:
+                raise ValueError(f"Saved field '{key}' must be true or false.")
+            return value
+
+        def resolve_item(name, expected_type=None):
+            if name is None:
+                return None
+            if not isinstance(name, str) or name not in ITEMS_BY_NAME:
+                raise ValueError(f"Unknown saved item: {name!r}")
+            item = ITEMS_BY_NAME[name]
+            if expected_type is not None and item.item_type != expected_type:
+                raise ValueError(f"Saved item '{name}' is not a {expected_type}.")
+            return item
+
+        # PLAYER AND INVENTORY
+        player_data = data.get("player")
+        if not isinstance(player_data, dict):
+            raise ValueError("Saved player data is missing.")
+        new_player = Player()
+        x = number(player_data, "x", 0, self.world.get_width() - new_player.width, True)
+        y = number(player_data, "y", 0, self.world.get_height() - new_player.height, True)
+        new_player.rect.topleft = (x, y)
+        if self.world.collides_with_wall(new_player.rect):
+            raise ValueError("The saved player position intersects a wall.")
+        new_player.x, new_player.y = x, y
+
+        new_player.max_health = number(player_data, "max_health", 1, 10000, True)
+        new_player.base_max_health = number(
+            player_data, "base_max_health", 1, new_player.max_health, True
+        )
+        new_player.health = number(
+            player_data, "health", 0, new_player.max_health, True
+        )
+        new_player.level = number(player_data, "level", 1, 999, True)
+        new_player.xp = number(player_data, "xp", 0, 10000000, True)
+        new_player.xp_to_next_level = number(
+            player_data, "xp_to_next_level", 1, 10000000, True
+        )
+        new_player.base_attack_damage = number(
+            player_data, "base_attack_damage", 1, 100000, True
+        )
+        direction = player_data.get("direction", "down")
+        if direction not in ("up", "down", "left", "right"):
+            raise ValueError("The saved player direction is invalid.")
+        new_player.direction = direction
+        new_player.damage_cooldown = number(
+            player_data, "damage_cooldown", 0, 5, default=0.0
+        )
+        new_player.hit_flash_timer = number(
+            player_data, "hit_flash_timer", 0, 1, default=0.0
+        )
+        new_player.is_attacking = flag(player_data, "is_attacking", False)
+        new_player.attack_timer = number(
+            player_data, "attack_timer", 0, 5, default=0.0
+        )
+        new_player.attack_cooldown_timer = number(
+            player_data, "attack_cooldown_timer", 0, 5, default=0.0
+        )
+        new_player.attack_has_hit = flag(player_data, "attack_has_hit", False)
+        new_player.is_dead = new_player.health <= 0
+
+        raw_slots = player_data.get("inventory")
+        if not isinstance(raw_slots, list) or len(raw_slots) != new_player.inventory.max_slots:
+            raise ValueError("Saved inventory slot count does not match this game version.")
+        restored_slots = []
+        for slot_data in raw_slots:
+            if slot_data is None:
+                restored_slots.append(None)
+                continue
+            if not isinstance(slot_data, dict):
+                raise ValueError("A saved inventory slot is invalid.")
+            item = resolve_item(slot_data.get("item"))
+            quantity = number(slot_data, "quantity", 1, 999, True)
+            if not item.stackable and quantity != 1:
+                raise ValueError("A non-stackable saved item has an invalid quantity.")
+            restored_slots.append({"item": item, "quantity": quantity})
+        new_player.inventory.slots = restored_slots
+
+        equipment = player_data.get("equipment")
+        if not isinstance(equipment, dict):
+            raise ValueError("Saved equipment data is missing.")
+        new_player.equipped_weapon = resolve_item(equipment.get("weapon"), "weapon")
+        new_player.equipped_shield = resolve_item(equipment.get("shield"), "armor")
+        new_player.equipped_armor = resolve_item(equipment.get("armor"), "armor")
+        new_player.recalculate_attack_damage()
+        new_player.update_attack_rect()
+
+        # WAVE STATE
+        wave_data = data.get("wave")
+        if not isinstance(wave_data, dict):
+            raise ValueError("Saved wave data is missing.")
+        new_wave = WaveManager()
+        current_wave = number(
+            wave_data, "current_wave", 1, new_wave.total_waves, True
+        )
+        phase = wave_data.get("phase")
+        if phase not in (new_wave.ACTIVE, new_wave.INTERMISSION, new_wave.BOSS, new_wave.VICTORY):
+            raise ValueError("The saved wave phase is invalid.")
+        if phase in (new_wave.BOSS, new_wave.VICTORY) and current_wave != new_wave.total_waves:
+            raise ValueError("The saved boss/finale phase has an invalid wave number.")
+        pending = wave_data.get("pending_enemy_types")
+        if (
+            not isinstance(pending, list)
+            or len(pending) > 100
+            or any(kind not in VALID_ENEMY_TYPES for kind in pending)
+        ):
+            raise ValueError("The saved enemy queue is invalid.")
+        new_wave.current_wave = current_wave
+        new_wave.phase = phase
+        new_wave.pending_enemy_types = list(pending)
+        new_wave.spawn_timer = number(wave_data, "spawn_timer", 0, 60, default=0.0)
+        new_wave.intermission_remaining = number(
+            wave_data, "intermission_remaining", 0, new_wave.intermission_duration, default=0.0
+        )
+        announcement = wave_data.get("announcement", "")
+        if not isinstance(announcement, str) or len(announcement) > 80:
+            raise ValueError("The saved wave announcement is invalid.")
+        new_wave.announcement = announcement
+        new_wave.announcement_timer = number(
+            wave_data, "announcement_timer", 0, 60, default=0.0
+        )
+        new_wave.spawned_this_wave = number(
+            wave_data, "spawned_this_wave", 0, 5000, True, default=0
+        )
+        new_wave.total_spawned = number(
+            wave_data, "total_spawned", 0, 10000, True, default=0
+        )
+
+        # REGULAR ENEMIES
+        enemy_data = data.get("enemies")
+        if not isinstance(enemy_data, list) or len(enemy_data) > 500:
+            raise ValueError("Saved enemy data is invalid.")
+        new_enemies = []
+        for saved_enemy in enemy_data:
+            if not isinstance(saved_enemy, dict):
+                raise ValueError("A saved enemy is invalid.")
+            enemy_type = saved_enemy.get("type")
+            if enemy_type not in VALID_ENEMY_TYPES:
+                raise ValueError(f"Unknown saved enemy type: {enemy_type!r}")
+            enemy = Enemy(
+                number(saved_enemy, "x", 0, self.world.get_width() - 40, True),
+                number(saved_enemy, "y", 0, self.world.get_height() - 40, True),
+                enemy_type,
+            )
+            enemy.health = number(saved_enemy, "health", 0, enemy.max_health, True)
+            enemy.attack_timer = number(
+                saved_enemy, "attack_timer", 0, 100, default=0.0
+            )
+            enemy.hit_flash_timer = number(
+                saved_enemy, "hit_flash_timer", 0, 1, default=0.0
+            )
+            if not enemy.is_dead() and self.world.collides_with_wall(enemy.rect):
+                raise ValueError("A saved enemy position intersects a wall.")
+            new_enemies.append(enemy)
+
+        # BOSS STATE, INCLUDING ANY ATTACK TELEGRAPH CURRENTLY IN PROGRESS
+        boss_data = data.get("boss")
+        new_boss = None
+        if boss_data is not None:
+            if not isinstance(boss_data, dict):
+                raise ValueError("Saved boss data is invalid.")
+            boss_x = number(boss_data, "x", 0, self.world.get_width() - 48, True)
+            boss_y = number(boss_data, "y", 0, self.world.get_height() - 48, True)
+            new_boss = DungeonBoss(boss_x, boss_y)
+            new_boss.health = number(
+                boss_data, "health", 0, new_boss.max_health, True
+            )
+            state = boss_data.get("state")
+            if state not in ("approach", "slam_windup", "pulse_windup", "recover"):
+                raise ValueError("The saved boss state is invalid.")
+            new_boss.state = state
+            new_boss.state_timer = number(boss_data, "state_timer", 0, 60, default=0.0)
+            new_boss.attack_cooldown = number(
+                boss_data, "attack_cooldown", 0, 60, default=0.0
+            )
+            new_boss.special_cooldown = number(
+                boss_data, "special_cooldown", 0, 60, default=0.0
+            )
+            new_boss.hit_flash_timer = number(
+                boss_data, "hit_flash_timer", 0, 1, default=0.0
+            )
+            telegraph = boss_data.get("telegraph_position")
+            if telegraph is not None:
+                if (
+                    not isinstance(telegraph, list)
+                    or len(telegraph) != 2
+                    or any(
+                        isinstance(part, bool)
+                        or not isinstance(part, (int, float))
+                        or not math.isfinite(float(part))
+                        for part in telegraph
+                    )
+                ):
+                    raise ValueError("The saved boss telegraph position is invalid.")
+                if not (
+                    0 <= telegraph[0] <= self.world.get_width()
+                    and 0 <= telegraph[1] <= self.world.get_height()
+                ):
+                    raise ValueError("The saved boss telegraph lies outside the dungeon.")
+                new_boss.telegraph_position = (int(telegraph[0]), int(telegraph[1]))
+            else:
+                new_boss.telegraph_position = None
+            if not new_boss.is_dead() and self.world.collides_with_wall(new_boss.rect):
+                raise ValueError("The saved boss position intersects a wall.")
+            if phase != new_wave.BOSS and not new_boss.is_dead():
+                raise ValueError("A living boss can only be saved during the boss encounter.")
+        if phase == new_wave.VICTORY and new_boss is not None and not new_boss.is_dead():
+            raise ValueError("A victory save still has a living boss.")
+
+        # DROPPED ITEMS
+        loot_data = data.get("loot")
+        if not isinstance(loot_data, list) or len(loot_data) > 500:
+            raise ValueError("Saved loot data is invalid.")
+        new_loot = []
+        for saved_drop in loot_data:
+            if not isinstance(saved_drop, dict):
+                raise ValueError("A saved loot item is invalid.")
+            item = resolve_item(saved_drop.get("item"))
+            if item is None:
+                raise ValueError("A saved loot item is missing its item type.")
+            drop_x = number(saved_drop, "x", 0, self.world.get_width(), True)
+            drop_y = number(saved_drop, "y", 0, self.world.get_height(), True)
+            new_loot.append(Loot(drop_x, drop_y, item))
+
+        # QUEST STATE
+        quest_data = data.get("quest")
+        if not isinstance(quest_data, dict):
+            raise ValueError("Saved quest data is missing.")
+        new_quest = QuestManager()
+        new_quest.completed = flag(quest_data, "completed", False)
+        new_quest.reward_claimed = flag(quest_data, "reward_claimed", False)
+        if new_quest.reward_claimed and not new_quest.completed:
+            raise ValueError("The saved quest reward state is inconsistent.")
+
+        # Commit only after every section has been checked and reconstructed.
+        self.player = new_player
+        self.wave_manager = new_wave
+        self.enemies = new_enemies
+        self.boss = new_boss
+        self.loot = new_loot
+        self.quest_manager = new_quest
+        self.damage_numbers = []
+        self.inventory_ui.close()
+        self.quest_ui.close()
+        self.dialogue_ui.close()
+        self.settings_menu_visible = False
+        self.settings_buttons = {}
+        self.paused = False
+        self.pause_menu_buttons = {}
+        self.camera.update(
+            self.player.rect,
+            self.world.get_width(),
+            self.world.get_height(),
+            *self.screen.get_size()
+        )
+
+    def load_game(self):
+        """Load and validate a save; leave the current run untouched on failure."""
+        payload = self.save_manager.load()
+        if payload is None:
+            self.persistence_status = "Load failed: " + self.save_manager.last_error
+            return False
+
+        try:
+            self._restore_game_state(payload["game"])
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+            self.persistence_status = f"Load failed: {exc}"
+            return False
+
+        self.persistence_status = "Game loaded successfully."
+        return True
 
     def _find_npc_position(self, spawn_x, spawn_y):
         """Find a connected floor tile a short distance from the player spawn."""
@@ -630,6 +1102,7 @@ class Game:
             )
             self.fullscreen = True
 
+        self.settings_manager.set("start_fullscreen", self.fullscreen)
         pygame.display.set_caption(WINDOW_TITLE)
         self.camera.update(
             self.player.rect,
@@ -1029,6 +1502,8 @@ class Game:
 
         self.paused = False
         self.pause_menu_buttons = {}
+        self.settings_menu_visible = False
+        self.settings_buttons = {}
 
         # ==================================================
         # CLOSE INVENTORY
@@ -1059,7 +1534,7 @@ class Game:
         self.screen.blit(overlay, (0, 0))
 
         panel_width = min(480, screen_width - 36)
-        panel_height = min(390, screen_height - 36)
+        panel_height = min(430, screen_height - 36)
         panel = pygame.Rect(
             (screen_width - panel_width) // 2,
             (screen_height - panel_height) // 2,
@@ -1086,18 +1561,30 @@ class Game:
         )
         self.screen.blit(
             subtitle,
-            (panel.centerx - subtitle.get_width() // 2, panel.top + 72)
+            (panel.centerx - subtitle.get_width() // 2, panel.top + 59)
         )
 
+        if self.persistence_status:
+            status_surface = pygame.font.Font(None, 20).render(
+                self.persistence_status[:72], True, (163, 207, 166)
+            )
+            self.screen.blit(
+                status_surface,
+                (panel.centerx - status_surface.get_width() // 2, panel.top + 81)
+            )
+
         button_width = min(310, panel.width - 46)
-        button_height = 47
-        button_gap = 8
-        first_y = panel.top + 115
+        button_height = 35
+        button_gap = 4
+        first_y = panel.top + 104
         fullscreen_label = (
             "EXIT FULLSCREEN" if self.fullscreen else "ENTER FULLSCREEN"
         )
         button_specs = (
             ("resume", "RESUME", (35, 73, 53), (119, 198, 133)),
+            ("save", "SAVE GAME  [F5]", (38, 59, 48), (126, 183, 129)),
+            ("load", "LOAD GAME  [F9]", (38, 59, 74), (150, 185, 198)),
+            ("settings", "SETTINGS", (50, 49, 67), (160, 156, 199)),
             ("restart", "RESTART RUN", (78, 53, 29), (241, 185, 91)),
             ("fullscreen", fullscreen_label, (38, 59, 74), (150, 185, 198)),
             ("quit", "QUIT GAME", (69, 35, 36), (208, 113, 102)),
@@ -1139,7 +1626,93 @@ class Game:
         )
         self.screen.blit(
             hint,
-            (panel.centerx - hint.get_width() // 2, panel.bottom - 28)
+            (panel.centerx - hint.get_width() // 2, panel.bottom - 18)
+        )
+
+    def render_settings_menu(self):
+        """Draw persistent graphics/startup preferences above the pause menu."""
+        screen_width, screen_height = self.screen.get_size()
+        overlay = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
+        overlay.fill((2, 4, 8, 160))
+        self.screen.blit(overlay, (0, 0))
+
+        panel_width = min(540, screen_width - 32)
+        panel_height = min(410, screen_height - 32)
+        panel = pygame.Rect(
+            (screen_width - panel_width) // 2,
+            (screen_height - panel_height) // 2,
+            panel_width,
+            panel_height,
+        )
+        pygame.draw.rect(self.screen, (2, 4, 7), panel.move(4, 5))
+        pygame.draw.rect(self.screen, (11, 17, 23), panel)
+        pygame.draw.rect(self.screen, (121, 75, 41), panel, 3)
+        pygame.draw.rect(self.screen, (235, 171, 81), panel.inflate(-8, -8), 1)
+
+        title = self.pause_small_font.render(
+            "DUNGEON SETTINGS", True, (246, 190, 94)
+        )
+        self.screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 23))
+        subtitle = pygame.font.Font(None, 22).render(
+            "Changes are saved automatically.", True, (171, 183, 190)
+        )
+        self.screen.blit(
+            subtitle,
+            (panel.centerx - subtitle.get_width() // 2, panel.top + 55)
+        )
+
+        values = self.settings_manager.values
+        specifications = (
+            ("start_fullscreen", f"START FULLSCREEN: {'ON' if values['start_fullscreen'] else 'OFF'}"),
+            ("lighting_enabled", f"DUNGEON LIGHTING: {'ON' if values['lighting_enabled'] else 'OFF'}"),
+            ("post_processing_enabled", f"SCENE FINISH: {'ON' if values['post_processing_enabled'] else 'OFF'}"),
+            ("autosave_on_quit", f"SAVE ON EXIT: {'ON' if values['autosave_on_quit'] else 'OFF'}"),
+            ("back", "BACK TO MENU"),
+        )
+        self.settings_buttons = {}
+        button_width = min(380, panel.width - 48)
+        button_height = 43
+        button_gap = 8
+        first_y = panel.top + 91
+        mouse_pos = pygame.mouse.get_pos()
+
+        for index, (key, label) in enumerate(specifications):
+            button = pygame.Rect(
+                panel.centerx - button_width // 2,
+                first_y + index * (button_height + button_gap),
+                button_width,
+                button_height,
+            )
+            self.settings_buttons[key] = button
+            hover = button.collidepoint(mouse_pos)
+            if key == "back":
+                fill, border = (60, 44, 30), (218, 164, 83)
+            elif key in ("lighting_enabled", "post_processing_enabled"):
+                enabled = values[key]
+                fill = (31, 68, 49) if enabled else (70, 43, 42)
+                border = (118, 194, 133) if enabled else (190, 112, 102)
+            else:
+                fill, border = (38, 59, 74), (150, 185, 198)
+
+            actual_fill = tuple(min(255, channel + 14) for channel in fill) if hover else fill
+            pygame.draw.rect(self.screen, (3, 6, 9), button.move(2, 3))
+            pygame.draw.rect(self.screen, actual_fill, button)
+            pygame.draw.rect(self.screen, border, button, 2)
+            label_surface = pygame.font.Font(None, 25).render(
+                label, True, (244, 238, 223)
+            )
+            self.screen.blit(
+                label_surface,
+                (button.centerx - label_surface.get_width() // 2,
+                 button.centery - label_surface.get_height() // 2),
+            )
+
+        hint = pygame.font.Font(None, 19).render(
+            "ESC / ENTER  -  BACK", True, (154, 163, 168)
+        )
+        self.screen.blit(
+            hint,
+            (panel.centerx - hint.get_width() // 2, panel.bottom - 23)
         )
 
     # ======================================================
@@ -1421,12 +1994,13 @@ class Game:
 
         # Shade only the world and actors. UI is rendered afterward so its
         # labels and panels remain readable in the dark dungeon.
-        self.lighting.render(
-            self.screen,
-            self.world.torches,
-            self.player,
-            self.camera
-        )
+        if self.settings_manager.values["lighting_enabled"]:
+            self.lighting.render(
+                self.screen,
+                self.world.torches,
+                self.player,
+                self.camera
+            )
 
         # Re-draw flame silhouettes after the ambient pass so the fire remains
         # a crisp, bright focal point; keep enemy health bars similarly legible.
@@ -1450,7 +2024,8 @@ class Game:
 
         # Process the world/actors only. The UI rendered below remains crisp,
         # readable, and visually identical to the approved HUD design.
-        self.post_processing.apply(self.screen)
+        if self.settings_manager.values["post_processing_enabled"]:
+            self.post_processing.apply(self.screen)
 
         # Draw the interaction hint after scene finishing so it remains crisp.
         self.npc.render_interaction_prompt(
@@ -1501,6 +2076,8 @@ class Game:
         if self.paused:
 
             self.render_pause_menu()
+            if self.settings_menu_visible:
+                self.render_settings_menu()
 
         # ==================================================
         # GAME OVER
@@ -1563,5 +2140,8 @@ class Game:
         # ==================================================
         # QUIT
         # ==================================================
+
+        if self.settings_manager.values["autosave_on_quit"]:
+            self.save_game()
 
         pygame.quit()
