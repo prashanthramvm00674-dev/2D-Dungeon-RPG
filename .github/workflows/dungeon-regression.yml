@@ -2,7 +2,7 @@ name: Dungeon regression checks
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/enemy-waves]
   workflow_dispatch:
 
 permissions:
@@ -46,5 +46,8 @@ jobs:
       - name: Test dropped potion bottle rendering
         run: python tests/test_loot_rendering.py
 
-      - name: Test pause menu, fullscreen controls, and live hotbar integration
+      - name: Test four-wave state machine
+        run: python tests/test_wave_manager.py
+
+      - name: Test pause menu, fullscreen controls, hotbar, inventory, and wave integration
         run: python tests/test_game_ui_integration.py
