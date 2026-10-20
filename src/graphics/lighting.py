@@ -33,8 +33,6 @@ class LightingSystem:
         self._light_cache = {}
         self._ambient_surface = None
         self._ambient_size = None
-        self._vignette_surface = None
-        self._vignette_size = None
 
     def _get_light_texture(self, radius, color, strength):
         """Build and cache a radial alpha-gradient surface."""
@@ -70,52 +68,21 @@ class LightingSystem:
         return light
 
     def _get_ambient_surface(self, size):
-        """Reuse the full-screen darkness overlay until the window size changes."""
+        """
+        Reuse a constant-alpha ambient shade.
+
+        A regular RGB surface with Surface.set_alpha uses SDL's uniform-alpha
+        blit path. A per-pixel SRCALPHA surface covering the entire fullscreen
+        viewport was needlessly expensive on every rendered frame.
+        """
         if self._ambient_surface is None or self._ambient_size != size:
-            ambient = pygame.Surface(size, pygame.SRCALPHA)
-            ambient.fill(self.AMBIENT_COLOR)
+            ambient = pygame.Surface(size)
+            ambient.fill(self.AMBIENT_COLOR[:3])
+            ambient.set_alpha(self.AMBIENT_COLOR[3])
             self._ambient_surface = ambient
             self._ambient_size = size
 
         return self._ambient_surface
-
-    def _get_vignette_surface(self, size):
-        """
-        Build a cached, smooth edge vignette.
-
-        The target keeps the room readable near its center while letting the
-        outer edges fall into deep blue-black shadow. A tiny gradient is scaled
-        up once per viewport size, rather than calculated per pixel per frame.
-        """
-        if self._vignette_surface is not None and self._vignette_size == size:
-            return self._vignette_surface
-
-        gradient_width = 96
-        gradient_height = 54
-        gradient = pygame.Surface(
-            (gradient_width, gradient_height),
-            pygame.SRCALPHA
-        )
-
-        center_x = (gradient_width - 1) / 2
-        center_y = (gradient_height - 1) / 2
-        edge_scale = max(center_x, center_y)
-
-        for y in range(gradient_height):
-            for x in range(gradient_width):
-                dx = (x - center_x) / center_x
-                dy = (y - center_y) / center_y
-                distance = (dx * dx + dy * dy) ** 0.5
-
-                # Leave the central play area clear; strengthen shadow toward
-                # the corners, where the reference image fades into darkness.
-                falloff = max(0.0, min(1.0, (distance - 0.52) / 0.72))
-                alpha = int(112 * (falloff ** 1.55))
-                gradient.set_at((x, y), (0, 0, 0, alpha))
-
-        self._vignette_surface = pygame.transform.smoothscale(gradient, size)
-        self._vignette_size = size
-        return self._vignette_surface
 
     @staticmethod
     def _light_is_visible(screen_rect, position, radius):
@@ -148,9 +115,9 @@ class LightingSystem:
 
     def render(self, screen, torches, player, camera):
         """
-        Apply ambient darkness and lights in screen space.
+            Apply ambient darkness and lights in screen space.
 
-        torch entries use world-pixel center coordinates: {"x": int, "y": int}.
+        Torch entries use world-pixel center coordinates: {"x": int, "y": int}.
         Call this before the HUD so interface elements stay crisp and readable.
         """
         viewport_size = screen.get_size()
@@ -158,11 +125,6 @@ class LightingSystem:
             self._get_ambient_surface(viewport_size),
             (0, 0)
         )
-        screen.blit(
-            self._get_vignette_surface(viewport_size),
-            (0, 0)
-        )
-
         # Render the broad low-energy glow before the smaller light core.
         # Ordering these layers creates a soft pool rather than a flat orange
         # circle, while all textures remain cached between frames.
