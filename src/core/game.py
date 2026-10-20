@@ -21,6 +21,7 @@ from graphics.post_processing import ScenePostProcessor
 
 from entities.player import Player
 from entities.enemy import Enemy
+from entities.dungeon_boss import DungeonBoss
 from entities.npc import AshenWarden
 
 from entities.item import (
@@ -185,6 +186,13 @@ class Game:
             self.enemies.append(
                 Enemy(enemy_x, enemy_y, enemy_type)
             )
+
+        # ==================================================
+        # BOSS ENCOUNTER
+        # ==================================================
+
+        # Spawned only after the four survival waves have been cleared.
+        self.boss = None
 
         # ==================================================
         # DAMAGE NUMBERS
@@ -707,6 +715,16 @@ class Game:
             )
 
         # ==================================================
+        # BOSS AI
+        # ==================================================
+
+        if self.wave_manager.is_boss:
+            if self.boss is None:
+                self._spawn_boss()
+            if self.boss is not None and not self.boss.is_dead():
+                self.boss.update(self.player, self.dt, self.world)
+
+        # ==================================================
         # PLAYER ATTACK
         # ==================================================
 
@@ -777,6 +795,37 @@ class Game:
                     )
 
                     self.player.attack_has_hit = True
+
+            # The boss shares the player's existing attack timing and hit
+            # gating, so one swing can never damage it repeatedly.
+            if (
+                not self.player.attack_has_hit
+                and self.wave_manager.is_boss
+                and self.boss is not None
+                and not self.boss.is_dead()
+                and self.player.attack_rect.colliderect(self.boss.rect)
+            ):
+                damage = self.player.attack_damage
+                self.boss.take_damage(damage)
+                self.damage_numbers.append(
+                    DamageNumber(
+                        self.boss.rect.centerx,
+                        self.boss.rect.top,
+                        damage,
+                    )
+                )
+                self.player.attack_has_hit = True
+
+                if self.boss.is_dead():
+                    self.player.add_xp(self.boss.xp_reward)
+                    self.loot.append(
+                        Loot(
+                            self.boss.rect.centerx - 12,
+                            self.boss.rect.centery - 12,
+                            HEALTH_POTION,
+                        )
+                    )
+                    self.wave_manager.defeat_boss()
 
         # ==================================================
         # LOOT
@@ -862,6 +911,43 @@ class Game:
         self.enemies.append(Enemy(enemy_x, enemy_y, enemy_type))
         return True
 
+    def _spawn_boss(self):
+        """Place the guardian on safe edge floor away from the player and Warden."""
+        avoid_positions = [
+            (self.player.rect.x, self.player.rect.y),
+            (self.npc.rect.x, self.npc.rect.y),
+        ]
+        avoid_positions.extend(
+            (enemy.rect.x, enemy.rect.y)
+            for enemy in self.enemies
+            if not enemy.is_dead()
+        )
+
+        # Try each dungeon quadrant in turn. The boss has a slightly broader
+        # collision rectangle than ordinary enemies, so reject any candidate
+        # that would touch a wall before accepting the spawn.
+        for spawn_index in range(self.wave_manager.total_waves):
+            positions = self.world.get_edge_spawn_positions(
+                1,
+                avoid_positions=avoid_positions,
+                start_index=spawn_index,
+            )
+            if not positions:
+                continue
+            boss = DungeonBoss(*positions[0])
+            if not self.world.collides_with_wall(boss.rect):
+                self.boss = boss
+                self.wave_manager.announcement = "THE ASHEN TITAN"
+                self.wave_manager.announcement_timer = max(
+                    self.wave_manager.announcement_timer, 2.8
+                )
+                return True
+
+        # The generated dungeon has clear edge floor; this defensive fallback
+        # keeps a boss instance available even for custom test worlds.
+        self.boss = DungeonBoss(*self.world.get_center_spawn_position())
+        return not self.world.collides_with_wall(self.boss.rect)
+
     # ======================================================
     # RESTART
     # ======================================================
@@ -906,6 +992,7 @@ class Game:
 
         # Reset wave and quest progress alongside the player and inventory.
         self.wave_manager = WaveManager()
+        self.boss = None
         self.quest_manager = QuestManager()
         self.quest_ui.close()
         self.dialogue_ui.close()
@@ -1210,7 +1297,7 @@ class Game:
             "DUNGEON CLEARED", True, (255, 203, 112)
         )
         subtitle = self.game_over_small_font.render(
-            f"ALL {self.wave_manager.total_waves} WAVES DEFEATED",
+            "ALL WAVES AND THE GUARDIAN DEFEATED",
             True, (231, 225, 210)
         )
         quest_reward_text = self.game_over_small_font.render(
@@ -1296,6 +1383,13 @@ class Game:
             )
 
         # ==================================================
+        # BOSS
+        # ==================================================
+
+        if self.boss is not None:
+            self.boss.render(self.screen, self.camera)
+
+        # ==================================================
         # NPC
         # ==================================================
 
@@ -1362,6 +1456,10 @@ class Game:
         self.npc.render_interaction_prompt(
             self.screen, self.camera, self.player
         )
+
+        if self.boss is not None and self.wave_manager.is_boss:
+            self.boss.render_telegraph(self.screen, self.camera)
+            self.boss.render_health_bar(self.screen)
 
         # ==================================================
         # HUD
