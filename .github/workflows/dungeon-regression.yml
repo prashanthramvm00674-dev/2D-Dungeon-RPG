@@ -36,3 +36,6 @@ jobs:
 
       - name: Test inventory interactions and hotbar
         run: python tests/test_inventory_ui.py
+
+      - name: Test pause menu and live hotbar integration
+        run: python tests/test_game_ui_integration.py
