@@ -277,7 +277,8 @@ class Game:
                                 event.pos,
                                 self.player.inventory,
                                 self.player,
-                                self.screen.get_size()
+                                self.screen.get_size(),
+                                click_count=getattr(event, "clicks", 1)
                             )
                             continue
 
