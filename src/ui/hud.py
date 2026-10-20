@@ -70,53 +70,58 @@ class HUD:
         )
 
     def _draw_skull_badge(self, screen, rect):
+        """Draw a compact slate-and-silver enemy crest instead of a gold skull."""
         self._frame(screen, rect)
-        cx = rect.centerx
-        top = rect.y + rect.height // 5
-        width = rect.width * 0.48
-        height = rect.height * 0.56
-        skull = [
-            (int(cx - width * 0.62), int(top + height * 0.18)),
-            (int(cx - width * 0.46), int(top - height * 0.06)),
-            (int(cx), int(top - height * 0.16)),
-            (int(cx + width * 0.46), int(top - height * 0.06)),
-            (int(cx + width * 0.62), int(top + height * 0.18)),
-            (int(cx + width * 0.48), int(top + height * 0.63)),
-            (int(cx + width * 0.25), int(top + height * 0.78)),
-            (int(cx - width * 0.25), int(top + height * 0.78)),
-            (int(cx - width * 0.48), int(top + height * 0.63)),
-        ]
-        pygame.draw.polygon(screen, (224, 158, 65), skull)
-        pygame.draw.polygon(screen, (255, 208, 113), skull, 2)
+        cx, cy = rect.center
+        unit = min(rect.width, rect.height) / 78.0
 
-        eye_y = int(top + height * 0.34)
-        eye_rx = max(3, int(width * 0.19))
-        eye_ry = max(3, int(height * 0.11))
-        pygame.draw.ellipse(
-            screen, (15, 17, 20),
-            (int(cx - width * 0.42), eye_y, eye_rx * 2, eye_ry * 2)
-        )
-        pygame.draw.ellipse(
-            screen, (15, 17, 20),
-            (int(cx + width * 0.05), eye_y, eye_rx * 2, eye_ry * 2)
-        )
-        nose = [
-            (cx, int(top + height * 0.43)),
-            (int(cx - width * 0.12), int(top + height * 0.59)),
-            (int(cx + width * 0.12), int(top + height * 0.59)),
+        def p(dx, dy):
+            return (int(cx + dx * unit), int(cy + dy * unit))
+
+        # A simplified stone skull silhouette with broad, readable forms.
+        skull = [
+            p(-23, -13), p(-18, -24), p(-7, -29), p(7, -29),
+            p(18, -24), p(23, -13), p(20, 2), p(14, 12),
+            p(12, 22), p(5, 22), p(5, 16), p(-5, 16),
+            p(-5, 22), p(-12, 22), p(-14, 12), p(-20, 2),
         ]
-        pygame.draw.polygon(screen, (24, 24, 23), nose)
-        tooth_y = int(top + height * 0.72)
-        pygame.draw.line(
-            screen, (73, 48, 30),
-            (int(cx - width * 0.28), tooth_y),
-            (int(cx + width * 0.28), tooth_y), 2
-        )
-        for tooth in (-0.15, 0, 0.15):
-            tx = int(cx + width * tooth)
+        pygame.draw.polygon(screen, (20, 25, 30), [
+            (x + max(1, int(2 * unit)), y + max(1, int(3 * unit)))
+            for x, y in skull
+        ])
+        pygame.draw.polygon(screen, (104, 116, 124), skull)
+        pygame.draw.polygon(screen, (190, 199, 202), skull, max(1, int(2 * unit)))
+
+        # Cool silver planes provide a chiseled, stone-metal finish.
+        pygame.draw.line(screen, (218, 224, 224), p(-15, -17), p(-6, -24), max(1, int(2 * unit)))
+        pygame.draw.line(screen, (218, 224, 224), p(-6, -24), p(4, -25), max(1, int(2 * unit)))
+        pygame.draw.line(screen, (69, 79, 87), p(-18, -3), p(-13, 7), max(1, int(2 * unit)))
+        pygame.draw.line(screen, (69, 79, 87), p(18, -3), p(13, 7), max(1, int(2 * unit)))
+
+        # Deep, angular eye sockets and a small triangular nasal cavity.
+        eye_y = int(cy - 3 * unit)
+        eye_w = max(5, int(12 * unit))
+        eye_h = max(5, int(12 * unit))
+        left_eye = pygame.Rect(int(cx - 17 * unit), eye_y, eye_w, eye_h)
+        right_eye = pygame.Rect(int(cx + 5 * unit), eye_y, eye_w, eye_h)
+        pygame.draw.polygon(screen, (24, 29, 34), [
+            p(-18, -5), p(-7, -7), p(-9, 5), p(-16, 7)
+        ])
+        pygame.draw.polygon(screen, (24, 29, 34), [
+            p(18, -5), p(7, -7), p(9, 5), p(16, 7)
+        ])
+        pygame.draw.polygon(screen, (37, 43, 48), [
+            p(0, 2), p(-4, 10), p(4, 10)
+        ])
+
+        # Three short teeth are separated by dark grooves, avoiding a busy icon.
+        jaw_y = p(0, 14)[1]
+        pygame.draw.line(screen, (51, 59, 64), p(-9, 13), p(9, 13), max(1, int(2 * unit)))
+        for offset in (-5, 0, 5):
             pygame.draw.line(
-                screen, (73, 48, 30),
-                (tx, tooth_y), (tx, tooth_y + max(2, int(height * 0.12))), 1
+                screen, (211, 217, 216),
+                p(offset, 14), p(offset, 19),
+                max(1, int(2 * unit))
             )
 
     def _draw_gem_badge(self, screen, rect):
