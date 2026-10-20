@@ -1,6 +1,7 @@
 import pygame
 
 from ui.item_icons import draw_item_icon
+from core.mouse import normalize_mouse_position
 
 
 class InventoryUI:
@@ -10,7 +11,11 @@ class InventoryUI:
         self.visible = False
 
         self.selected_slot = -1
+        self._last_clicked_slot = None
+        self._last_click_time_ms = 0
         self.hovered_slot = -1
+        self._last_clicked_slot = None
+        self._last_click_time_ms = 0
 
         self.font = pygame.font.Font(
             None,
@@ -44,6 +49,8 @@ class InventoryUI:
         self.visible = not self.visible
 
         self.selected_slot = -1
+        self._last_clicked_slot = None
+        self._last_click_time_ms = 0
 
     # ==================================================
     # CLOSE
@@ -487,7 +494,7 @@ class InventoryUI:
         screen_size=None,
         click_count=1
     ):
-        """Handle inventory slot selection and mouse-accessible item actions."""
+        """Select inventory slots and support reliable mouse item actions."""
         if not self.visible:
             return False
 
@@ -498,34 +505,56 @@ class InventoryUI:
                 (1920, 1080)
             )
 
-        layout = self._calculate_layout(screen_size)
+        mouse_position = normalize_mouse_position(
+            mouse_position,
+            screen_size
+        )
         mouse_x, mouse_y = mouse_position
+        layout = self._calculate_layout(screen_size)
+        now_ms = pygame.time.get_ticks()
 
-        # Slot drawing and hit testing share the same geometry. The small
-        # tolerance includes the visible metal edge and its drop shadow.
+        # Slot drawing and hit testing use the same geometry. The tolerance
+        # includes the visible metal edge and its drop shadow.
         for index in range(inventory.max_slots):
             rect = self._slot_rect(index, layout)
             if rect.inflate(8, 8).collidepoint(mouse_x, mouse_y):
+                same_slot_double_click = (
+                    self._last_clicked_slot == index
+                    and 0 <= now_ms - self._last_click_time_ms <= 380
+                )
                 self.selected_slot = index
+                self._last_clicked_slot = index
+                self._last_click_time_ms = now_ms
                 slot = inventory.slots[index]
 
-                if slot is not None and click_count >= 2:
+                # Some SDL/Pygame builds don't expose a click count on real
+                # mouse events. Detect a fast second click ourselves as well.
+                if slot is not None and (
+                    click_count >= 2 or same_slot_double_click
+                ):
                     self.activate_item(
                         slot["item"],
                         player,
                         inventory
                     )
+                    self._last_clicked_slot = None
+                    self._last_click_time_ms = 0
                 return True
 
-        # The action button is also a full mouse target. A single click on a
-        # slot selects it; the button performs USE/EQUIP, and double-clicking
-        # a populated slot performs the same primary action directly.
+        # A single click selects an item; this large button is a separate
+        # explicit USE/EQUIP target. It works without any keyboard input.
         button_rect = layout["button_rect"]
         if button_rect.collidepoint(mouse_x, mouse_y):
             if 0 <= self.selected_slot < inventory.max_slots:
                 slot = inventory.slots[self.selected_slot]
                 if slot is not None:
-                    self.activate_item(slot["item"], player, inventory)
+                    self.activate_item(
+                        slot["item"],
+                        player,
+                        inventory
+                    )
+            self._last_clicked_slot = None
+            self._last_click_time_ms = 0
             return True
 
         return False
@@ -625,7 +654,10 @@ class InventoryUI:
         gap = layout["gap"]
         columns = layout["columns"]
         self.hovered_slot = -1
-        mouse_position = pygame.mouse.get_pos()
+        mouse_position = normalize_mouse_position(
+            pygame.mouse.get_pos(),
+            screen.get_size()
+        )
 
         for index in range(
             inventory.max_slots
@@ -634,7 +666,7 @@ class InventoryUI:
             rect = self._slot_rect(index, layout)
             x, y = rect.topleft
             hovered = rect.inflate(8, 8).collidepoint(
-                pygame.mouse.get_pos()
+                mouse_position
             )
             if hovered:
                 self.hovered_slot = index
