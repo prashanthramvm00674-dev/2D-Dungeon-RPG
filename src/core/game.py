@@ -14,6 +14,7 @@ from core.settings import (
 from core.input import InputManager
 from core.camera import Camera
 from core.wave_manager import WaveManager
+from core.quest_manager import QuestManager
 from core.damage_number import DamageNumber
 from graphics.lighting import LightingSystem
 from graphics.post_processing import ScenePostProcessor
@@ -33,6 +34,7 @@ from world.world import World
 
 from ui.hud import HUD
 from ui.inventory_ui import InventoryUI
+from ui.quest_ui import QuestJournalUI
 
 
 def _enable_windows_dpi_awareness():
@@ -224,6 +226,8 @@ class Game:
         # ==================================================
 
         self.inventory_ui = InventoryUI()
+        self.quest_manager = QuestManager()
+        self.quest_ui = QuestJournalUI()
 
         # ==================================================
         # FONTS
@@ -331,7 +335,12 @@ class Game:
                         # The top-right button remains a pause/menu control.
                         if self.hud.menu_button_contains(mouse_position):
                             self.inventory_ui.close()
+                            self.quest_ui.close()
                             self.paused = True
+                            continue
+
+                        if self.quest_ui.visible:
+                            # The journal is modal; ignore world/hotbar clicks.
                             continue
 
                         if self.inventory_ui.visible:
@@ -401,6 +410,15 @@ class Game:
                     continue
 
                 # ==================================================
+                # QUEST JOURNAL
+                # ==================================================
+
+                if self.quest_ui.visible:
+                    if event.key in (pygame.K_j, pygame.K_ESCAPE):
+                        self.quest_ui.close()
+                    continue
+
+                # ==================================================
                 # INVENTORY
                 # ==================================================
 
@@ -439,6 +457,15 @@ class Game:
                         self.restart()
                     elif event.key == pygame.K_q:
                         self.running = False
+                    continue
+
+                # ==================================================
+                # QUEST JOURNAL TOGGLE
+                # ==================================================
+
+                if event.key == pygame.K_j:
+                    self.inventory_ui.close()
+                    self.quest_ui.toggle()
                     continue
 
                 # ==================================================
@@ -539,7 +566,7 @@ class Game:
         # INVENTORY
         # ==================================================
 
-        if self.inventory_ui.visible:
+        if self.inventory_ui.visible or self.quest_ui.visible:
 
             return
 
@@ -692,6 +719,11 @@ class Game:
             alive_count,
             self._spawn_wave_enemy,
         )
+        self.quest_manager.update(
+            self.wave_manager,
+            sum(not enemy.is_dead() for enemy in self.enemies),
+            self.player,
+        )
 
         # ==================================================
         # CAMERA
@@ -766,8 +798,10 @@ class Game:
         # RESET ENEMIES
         # ==================================================
 
-        # Reset the entire wave run alongside the player and inventory.
+        # Reset wave and quest progress alongside the player and inventory.
         self.wave_manager = WaveManager()
+        self.quest_manager = QuestManager()
+        self.quest_ui.close()
         self.enemies = []
         enemy_types = self.wave_manager.initial_roster
         enemy_positions = self.world.get_edge_spawn_positions(
@@ -1072,6 +1106,10 @@ class Game:
             f"ALL {self.wave_manager.total_waves} WAVES DEFEATED",
             True, (231, 225, 210)
         )
+        quest_reward_text = self.game_over_small_font.render(
+            f"QUEST COMPLETE  +{self.quest_manager.REWARD_XP} XP",
+            True, (132, 207, 143)
+        )
         restart_text = self.game_over_small_font.render(
             "R  -  RESTART", True, (255, 255, 255)
         )
@@ -1088,10 +1126,14 @@ class Game:
             subtitle, (center_x - subtitle.get_width() // 2, center_y - 35)
         )
         self.screen.blit(
-            restart_text, (center_x - restart_text.get_width() // 2, center_y + 30)
+            quest_reward_text,
+            (center_x - quest_reward_text.get_width() // 2, center_y + 8)
         )
         self.screen.blit(
-            quit_text, (center_x - quit_text.get_width() // 2, center_y + 72)
+            restart_text, (center_x - restart_text.get_width() // 2, center_y + 48)
+        )
+        self.screen.blit(
+            quit_text, (center_x - quit_text.get_width() // 2, center_y + 88)
         )
 
     # ======================================================
@@ -1225,6 +1267,13 @@ class Game:
             self.screen,
             self.player.inventory,
             self.player
+        )
+
+        self.quest_ui.render(
+            self.screen,
+            self.quest_manager,
+            self.wave_manager,
+            sum(not enemy.is_dead() for enemy in self.enemies),
         )
 
         # ==================================================

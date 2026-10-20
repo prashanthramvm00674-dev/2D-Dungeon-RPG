@@ -45,6 +45,7 @@ def main():
     assert game.player.inventory.get_item_count(HEALTH_POTION) == 3
     assert game.wave_manager.current_wave == 1
     assert len(game.enemies) == len(game.wave_manager.initial_roster) == 4
+    assert game.quest_manager.status == "active"
 
     # The top-right button opens a pause menu, not the inventory overlay.
     click(game, game.hud.menu_button_rect.center)
@@ -107,6 +108,17 @@ def main():
     press(game, pygame.K_i)
     assert not game.inventory_ui.visible
 
+    # The quest journal is modal, keyboard-accessible, and does not advance time.
+    press(game, pygame.K_j)
+    assert game.quest_ui.visible
+    old_wave_timer = game.wave_manager.spawn_timer
+    game.dt = 1.0
+    game.update()
+    assert game.wave_manager.spawn_timer == old_wave_timer
+    game.render()
+    press(game, pygame.K_j)
+    assert not game.quest_ui.visible
+
     # A wave ends only after every living enemy is defeated. The next wave
     # waits through its intermission, then queues/spawns reinforcements.
     for enemy in game.enemies:
@@ -138,11 +150,20 @@ def main():
 
     # Victory presentation is renderable and R starts a fresh wave run.
     game.wave_manager.phase = game.wave_manager.VICTORY
+    game.quest_manager.update(game.wave_manager, 0, game.player)
+    assert game.quest_manager.completed
+    assert game.quest_manager.reward_claimed
+    assert game.player.xp > 0
+    xp_after_reward = game.player.xp
+    game.quest_manager.update(game.wave_manager, 0, game.player)
+    assert game.player.xp == xp_after_reward
     game.render()
     press(game, pygame.K_r)
     assert game.wave_manager.current_wave == 1
     assert not game.wave_manager.is_victory
     assert len(game.enemies) == 4
+    assert game.quest_manager.status == "active"
+    assert not game.quest_ui.visible
 
     pygame.quit()
     print(
