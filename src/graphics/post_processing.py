@@ -27,6 +27,7 @@ class ScenePostProcessor:
 
     def __init__(self):
         self._vignette_cache = {}
+        self._grade_surface_cache = {}
 
     def _build_vignette(self, size):
         """Build a soft elliptical vignette once for a given display size."""
@@ -72,16 +73,33 @@ class ScenePostProcessor:
         self._vignette_cache[cache_key] = vignette
         return vignette
 
+    def _get_grade_surfaces(self, size):
+        """Cache solid blend surfaces so SDL can process each frame in C."""
+        cached = self._grade_surface_cache.get(size)
+        if cached is not None:
+            return cached
+
+        tone = pygame.Surface(size).convert()
+        tone.fill(self.TONE_MULTIPLIER)
+        lift = pygame.Surface(size).convert()
+        lift.fill(self.SHADOW_LIFT)
+        cached = (tone, lift)
+        self._grade_surface_cache[size] = cached
+        return cached
+
     def apply(self, screen):
         """Apply a small shadow-recovery grade and a cached soft vignette."""
-        # These surface blend operations are handled by SDL and avoid a
-        # dependency on NumPy or a costly full-frame Python pixel loop.
-        screen.fill(
-            self.TONE_MULTIPLIER,
+        # Blitting cached blend surfaces invokes SDL's fast RGB blend paths.
+        # This avoids a NumPy dependency or costly per-frame Python pixel loop.
+        tone, lift = self._get_grade_surfaces(screen.get_size())
+        screen.blit(
+            tone,
+            (0, 0),
             special_flags=pygame.BLEND_RGB_MULT
         )
-        screen.fill(
-            self.SHADOW_LIFT,
+        screen.blit(
+            lift,
+            (0, 0),
             special_flags=pygame.BLEND_RGB_ADD
         )
         screen.blit(
