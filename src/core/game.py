@@ -1,5 +1,9 @@
+import ctypes
+import sys
+
 import pygame
 
+from core.mouse import normalize_mouse_position
 from core.settings import (
     SCREEN_WIDTH,
     SCREEN_HEIGHT,
@@ -27,6 +31,39 @@ from world.world import World
 
 from ui.hud import HUD
 from ui.inventory_ui import InventoryUI
+
+
+def _enable_windows_dpi_awareness():
+    """Keep Pygame drawing and mouse input aligned on scaled Windows displays."""
+    if sys.platform != "win32":
+        return
+
+    try:
+        user32 = ctypes.windll.user32
+        # PER_MONITOR_AWARE_V2 prevents Windows from bitmap-scaling the window.
+        try:
+            if user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+                return
+        except (AttributeError, OSError):
+            pass
+
+        try:
+            if ctypes.windll.shcore.SetProcessDpiAwareness(2) == 0:
+                return
+        except (AttributeError, OSError):
+            pass
+
+        try:
+            user32.SetProcessDPIAware()
+        except (AttributeError, OSError):
+            pass
+    except Exception:
+        # DPI APIs differ on older Windows releases; normal startup should
+        # still work even when no awareness API is available.
+        return
+
+
+_enable_windows_dpi_awareness()
 
 
 class Game:
@@ -228,9 +265,11 @@ class Game:
             # ==================================================
 
             if event.type == pygame.VIDEORESIZE:
-                # Recreate the display surface at the real client size.
-                # This keeps Pygame drawing bounds and the camera viewport
-                # synchronized when the user resizes the window.
+                # Fullscreen size changes are managed by SDL itself; only
+                # recreate the surface for a real user-resized window.
+                if self.fullscreen:
+                    continue
+
                 new_width = max(640, int(event.w))
                 new_height = max(480, int(event.h))
 
@@ -238,6 +277,7 @@ class Game:
                     (new_width, new_height),
                     pygame.RESIZABLE
                 )
+                self.windowed_size = self.screen.get_size()
 
                 self.camera.update(
                     self.player.rect,
@@ -253,26 +293,35 @@ class Game:
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
+                    mouse_position = normalize_mouse_position(
+                        event.pos,
+                        self.screen.get_size()
+                    )
+
                     if self.paused:
-                        # Click targets are created by render_pause_menu().
+                        # Click targets are drawn in surface pixels, so use
+                        # the same coordinate space as their hitboxes.
                         buttons = self.pause_menu_buttons
-                        if buttons.get("resume", pygame.Rect(0, 0, 0, 0)).collidepoint(event.pos):
+                        if buttons.get("resume", pygame.Rect(0, 0, 0, 0)).collidepoint(mouse_position):
                             self.paused = False
-                        elif buttons.get("restart", pygame.Rect(0, 0, 0, 0)).collidepoint(event.pos):
+                        elif buttons.get("restart", pygame.Rect(0, 0, 0, 0)).collidepoint(mouse_position):
                             self.restart()
-                        elif buttons.get("quit", pygame.Rect(0, 0, 0, 0)).collidepoint(event.pos):
+                        elif buttons.get("quit", pygame.Rect(0, 0, 0, 0)).collidepoint(mouse_position):
                             self.running = False
+                        elif buttons.get("fullscreen", pygame.Rect(0, 0, 0, 0)).collidepoint(mouse_position):
+                            self.toggle_fullscreen()
                         continue
 
                     if not self.player.is_dead:
-                        # The top-right button is now a pause/menu control,
-                        # never an inventory shortcut.
-                        if self.hud.menu_button_contains(event.pos):
+                        # The top-right button remains a pause/menu control.
+                        if self.hud.menu_button_contains(mouse_position):
                             self.inventory_ui.close()
                             self.paused = True
                             continue
 
                         if self.inventory_ui.visible:
+                            # InventoryUI normalizes the raw event coordinates
+                            # itself so direct UI callers share the same path.
                             self.inventory_ui.handle_click(
                                 event.pos,
                                 self.player.inventory,
@@ -282,7 +331,7 @@ class Game:
                             )
                             continue
 
-                        quick_slot = self.hud.hotbar_slot_at(event.pos)
+                        quick_slot = self.hud.hotbar_slot_at(mouse_position)
                         if quick_slot is not None:
                             self.activate_hotbar_slot(quick_slot)
 
@@ -298,26 +347,15 @@ class Game:
                 # FULLSCREEN TOGGLE
                 # ==================================================
 
-                if event.key == pygame.K_F11:
-                    self.fullscreen = not self.fullscreen
-
-                    if self.fullscreen:
-                        self.screen = pygame.display.set_mode(
-                            self.desktop_size,
-                            pygame.FULLSCREEN
-                        )
-                    else:
-                        self.screen = pygame.display.set_mode(
-                            self.windowed_size,
-                            pygame.RESIZABLE
-                        )
-
-                    self.camera.update(
-                        self.player.rect,
-                        self.world.get_width(),
-                        self.world.get_height(),
-                        *self.screen.get_size()
+                if (
+                    event.key == pygame.K_F11
+                    or (
+                        event.key in (pygame.K_RETURN, pygame.K_KP_ENTER)
+                        and event.mod & pygame.KMOD_ALT
                     )
+                ):
+                    # F11 and Alt+Enter share the same tested toggle path.
+                    self.toggle_fullscreen()
                     continue
 
                 # ==================================================
@@ -407,6 +445,31 @@ class Game:
                 }
                 if event.key in hotkey_slots:
                     self.activate_hotbar_slot(hotkey_slots[event.key])
+
+    def toggle_fullscreen(self):
+        """Toggle immersive fullscreen and return to the last window size."""
+        if self.fullscreen:
+            self.screen = pygame.display.set_mode(
+                self.windowed_size,
+                pygame.RESIZABLE
+            )
+            self.fullscreen = False
+        else:
+            # Preserve the user's latest window size for the return trip.
+            self.windowed_size = self.screen.get_size()
+            self.screen = pygame.display.set_mode(
+                self.desktop_size,
+                pygame.FULLSCREEN
+            )
+            self.fullscreen = True
+
+        pygame.display.set_caption(WINDOW_TITLE)
+        self.camera.update(
+            self.player.rect,
+            self.world.get_width(),
+            self.world.get_height(),
+            *self.screen.get_size()
+        )
 
     def activate_hotbar_slot(self, index):
         """Use a consumable or equip gear from one of the five quick slots."""
@@ -741,12 +804,16 @@ class Game:
         )
 
         button_width = min(310, panel.width - 46)
-        button_height = 52
-        button_gap = 15
-        first_y = panel.top + 125
+        button_height = 47
+        button_gap = 8
+        first_y = panel.top + 115
+        fullscreen_label = (
+            "EXIT FULLSCREEN" if self.fullscreen else "ENTER FULLSCREEN"
+        )
         button_specs = (
             ("resume", "RESUME", (35, 73, 53), (119, 198, 133)),
             ("restart", "RESTART RUN", (78, 53, 29), (241, 185, 91)),
+            ("fullscreen", fullscreen_label, (38, 59, 74), (150, 185, 198)),
             ("quit", "QUIT GAME", (69, 35, 36), (208, 113, 102)),
         )
         mouse_pos = pygame.mouse.get_pos()
