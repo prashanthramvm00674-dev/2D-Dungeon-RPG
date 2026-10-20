@@ -35,13 +35,12 @@ def main():
     assert warm_highlight.r > warm_highlight.g > warm_highlight.b
 
     # Vignette is reused at a stable size and rebuilt safely after resizing.
-    grade_first = processor._get_grade_surface((160, 90))
-    grade_second = processor._get_grade_surface((160, 90))
-    first = processor._build_vignette((160, 90))
-    second = processor._build_vignette((160, 90))
-    resized = processor._build_vignette((320, 180))
-    assert grade_first is grade_second
+    first = processor._build_overlay((160, 90))
+    second = processor._build_overlay((160, 90))
+    resized = processor._build_overlay((320, 180))
     assert first is second
+    assert first.get_at((80, 45)).a > 0
+    assert first.get_at((0, 0)).a > first.get_at((80, 45)).a
     assert resized.get_size() == (320, 180)
 
     pygame.quit()
