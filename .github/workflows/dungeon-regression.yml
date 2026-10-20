@@ -2,7 +2,7 @@ name: Dungeon regression checks
 
 on:
   push:
-    branches: [main, feature/enemy-waves, feature/dungeon-quest]
+    branches: [main, feature/enemy-waves, feature/dungeon-quest, feature/ashen-warden-dialogue]
   workflow_dispatch:
 
 permissions:
@@ -52,5 +52,8 @@ jobs:
       - name: Test dungeon quest progression and reward
         run: python tests/test_quest_manager.py
 
-      - name: Test pause menu, fullscreen controls, hotbar, inventory, and wave integration
+      - name: Test Warden proximity and dialogue UI
+        run: python tests/test_npc_dialogue.py
+
+      - name: Test NPC interaction, pause menu, fullscreen, hotbar, inventory, and waves
         run: python tests/test_game_ui_integration.py
