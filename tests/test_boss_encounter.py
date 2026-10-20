@@ -110,6 +110,7 @@ def test_boss_art_telegraph_and_health_bar_render():
 
 
 def main():
+    pygame.init()
     test_slam_is_telegraphed_and_can_be_dodged()
     test_slam_damages_a_player_who_stays_in_the_warning()
     test_phase_two_shockwave_has_a_warning_and_can_hit()
