@@ -68,7 +68,6 @@ class ScenePostProcessor:
 
         del pixels
         vignette = pygame.transform.smoothscale(vignette, size)
-        vignette.set_alpha(None)
         self._vignette_cache[cache_key] = vignette
         return vignette
 
