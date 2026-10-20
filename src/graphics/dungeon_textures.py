@@ -313,7 +313,7 @@ class DungeonTextures:
         rng = random.Random(self.seed + 45017 + variant * 2371)
         size = self.TILE_SIZE
         tile = pygame.Surface((size, size))
-        tile.fill((25, 33, 39))
+        tile.fill((42, 51, 57))
 
         # Deep joints frame the tile without creating a bright, obvious grid.
         pygame.draw.lines(
@@ -327,12 +327,12 @@ class DungeonTextures:
 
         # Three to five fractured slate fragments create varied, stony texture.
         palette = (
-            (31, 42, 49),
-            (36, 47, 54),
-            (41, 51, 57),
-            (45, 54, 60),
-            (34, 44, 51),
-            (48, 56, 61),
+            (43, 53, 60),
+            (48, 58, 64),
+            (53, 63, 69),
+            (58, 67, 73),
+            (46, 56, 62),
+            (64, 73, 78),
         )
         for _ in range(rng.randint(3, 5)):
             cx = rng.randint(7, size - 8)
@@ -356,10 +356,10 @@ class DungeonTextures:
             px = rng.randint(2, size - 3)
             py = rng.randint(2, size - 3)
             color = rng.choice((
-                (17, 25, 31),
-                (23, 32, 38),
-                (53, 62, 67),
-                (59, 67, 71),
+                (24, 32, 38),
+                (33, 42, 48),
+                (65, 74, 79),
+                (72, 81, 85),
             ))
             width = rng.choice((1, 1, 2, 3))
             pygame.draw.rect(tile, color, (px, py, width, rng.choice((1, 2))))
@@ -380,7 +380,7 @@ class DungeonTextures:
                 pygame.draw.lines(tile, (65, 73, 76), False, crack[:2], 1)
 
         # Dusty, lightly lifted upper edge and shaded lower edge.
-        pygame.draw.line(tile, (45, 55, 61), (3, 2), (size - 5, 2), 1)
+        pygame.draw.line(tile, (58, 68, 73), (3, 2), (size - 5, 2), 1)
         pygame.draw.line(tile, (17, 24, 29), (2, size - 2), (size - 2, size - 2), 2)
         return tile
 
