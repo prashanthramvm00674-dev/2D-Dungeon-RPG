@@ -2,7 +2,7 @@ name: Dungeon regression checks
 
 on:
   push:
-    branches: [main, feature/enemy-waves]
+    branches: [main, feature/enemy-waves, feature/dungeon-quest]
   workflow_dispatch:
 
 permissions:
@@ -48,6 +48,9 @@ jobs:
 
       - name: Test four-wave state machine
         run: python tests/test_wave_manager.py
+
+      - name: Test dungeon quest progression and reward
+        run: python tests/test_quest_manager.py
 
       - name: Test pause menu, fullscreen controls, hotbar, inventory, and wave integration
         run: python tests/test_game_ui_integration.py
