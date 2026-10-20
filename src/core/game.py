@@ -75,6 +75,7 @@ class Game:
 
         self.running = True
         self.paused = False
+        self.pause_menu_buttons = {}
         self.dt = 0.0
 
         self.input = InputManager()
@@ -247,27 +248,42 @@ class Game:
                 continue
 
             # ==================================================
-            # INVENTORY MOUSE INPUT
+            # MOUSE INPUT: MENU, INVENTORY, AND QUICK SLOTS
             # ==================================================
 
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1 and not self.player.is_dead:
-                    # The target-style top-right menu button toggles inventory.
-                    # Check it first so the same button can close the overlay.
-                    if (
-                        not self.paused
-                        and self.hud.menu_button_contains(event.pos)
-                    ):
-                        self.inventory_ui.toggle()
+                if event.button == 1:
+                    if self.paused:
+                        # Click targets are created by render_pause_menu().
+                        buttons = self.pause_menu_buttons
+                        if buttons.get("resume", pygame.Rect(0, 0, 0, 0)).collidepoint(event.pos):
+                            self.paused = False
+                        elif buttons.get("restart", pygame.Rect(0, 0, 0, 0)).collidepoint(event.pos):
+                            self.restart()
+                        elif buttons.get("quit", pygame.Rect(0, 0, 0, 0)).collidepoint(event.pos):
+                            self.running = False
                         continue
 
-                    if self.inventory_ui.visible:
-                        self.inventory_ui.handle_click(
-                            event.pos,
-                            self.player.inventory,
-                            self.player,
-                            self.screen.get_size()
-                        )
+                    if not self.player.is_dead:
+                        # The top-right button is now a pause/menu control,
+                        # never an inventory shortcut.
+                        if self.hud.menu_button_contains(event.pos):
+                            self.inventory_ui.close()
+                            self.paused = True
+                            continue
+
+                        if self.inventory_ui.visible:
+                            self.inventory_ui.handle_click(
+                                event.pos,
+                                self.player.inventory,
+                                self.player,
+                                self.screen.get_size()
+                            )
+                            continue
+
+                        quick_slot = self.hud.hotbar_slot_at(event.pos)
+                        if quick_slot is not None:
+                            self.activate_hotbar_slot(quick_slot)
 
                 continue
 
@@ -348,36 +364,72 @@ class Game:
                     continue
 
                 # ==================================================
+                # PAUSED MENU SHORTCUTS
+                # ==================================================
+
+                if self.paused:
+                    if event.key in (pygame.K_ESCAPE, pygame.K_RETURN):
+                        self.paused = False
+                    elif event.key == pygame.K_r:
+                        self.restart()
+                    elif event.key == pygame.K_q:
+                        self.running = False
+                    continue
+
+                # ==================================================
                 # INVENTORY TOGGLE
                 # ==================================================
 
                 if event.key == pygame.K_i:
-
-                    if not self.paused:
-
-                        self.inventory_ui.toggle()
-
+                    self.inventory_ui.toggle()
                     continue
 
                 # ==================================================
-                # PAUSE / RESUME
+                # OPEN MENU
                 # ==================================================
 
                 if event.key == pygame.K_ESCAPE:
-
-                    self.paused = not self.paused
-
+                    self.inventory_ui.close()
+                    self.paused = True
                     continue
 
                 # ==================================================
-                # QUIT FROM PAUSE
+                # QUICK-SLOT HOTKEYS
                 # ==================================================
 
-                if event.key == pygame.K_q:
+                hotkey_slots = {
+                    pygame.K_1: 0,
+                    pygame.K_2: 1,
+                    pygame.K_3: 2,
+                    pygame.K_4: 3,
+                    pygame.K_5: 4,
+                }
+                if event.key in hotkey_slots:
+                    self.activate_hotbar_slot(hotkey_slots[event.key])
 
-                    if self.paused:
+    def activate_hotbar_slot(self, index):
+        """Use a consumable or equip gear from one of the five quick slots."""
+        if index < 0 or index >= min(5, self.player.inventory.max_slots):
+            return False
 
-                        self.running = False
+        slot = self.player.inventory.slots[index]
+        if slot is None:
+            return False
+
+        item = slot["item"]
+        if item.item_type == "consumable":
+            return self.inventory_ui.use_item(
+                item,
+                self.player,
+                self.player.inventory
+            )
+
+        if item.item_type in ("weapon", "armor"):
+            was_equipped = self.inventory_ui.is_equipped(item, self.player)
+            self.inventory_ui.equip_or_unequip(item, self.player)
+            return not was_equipped
+
+        return False
 
     # ======================================================
     # UPDATE
@@ -626,6 +678,7 @@ class Game:
         # ==================================================
 
         self.paused = False
+        self.pause_menu_buttons = {}
 
         # ==================================================
         # CLOSE INVENTORY
@@ -649,97 +702,90 @@ class Game:
     # ======================================================
 
     def render_pause_menu(self):
+        """Draw an interactive gold-framed pause menu above the dungeon."""
+        screen_width, screen_height = self.screen.get_size()
+        overlay = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
+        overlay.fill((2, 5, 9, 190))
+        self.screen.blit(overlay, (0, 0))
 
-        # ==================================================
-        # DARK OVERLAY
-        # ==================================================
-
-        overlay = pygame.Surface(
-            self.screen.get_size(),
-            pygame.SRCALPHA
+        panel_width = min(480, screen_width - 36)
+        panel_height = min(390, screen_height - 36)
+        panel = pygame.Rect(
+            (screen_width - panel_width) // 2,
+            (screen_height - panel_height) // 2,
+            panel_width,
+            panel_height
         )
 
-        overlay.fill(
-            (0, 0, 0, 170)
-        )
+        pygame.draw.rect(self.screen, (2, 4, 7), panel.move(5, 6))
+        pygame.draw.rect(self.screen, (10, 17, 24), panel)
+        pygame.draw.rect(self.screen, (121, 75, 41), panel, 4)
+        pygame.draw.rect(self.screen, (235, 171, 81), panel.inflate(-9, -9), 1)
 
+        title = self.pause_small_font.render(
+            "DUNGEON PAUSED", True, (246, 190, 94)
+        )
         self.screen.blit(
-            overlay,
-            (0, 0)
+            title,
+            (panel.centerx - title.get_width() // 2, panel.top + 32)
         )
 
-        # ==================================================
-        # CENTER
-        # ==================================================
-
-        center_x = (
-            self.screen.get_width()
-            // 2
+        subtitle_font = pygame.font.Font(None, 22)
+        subtitle = subtitle_font.render(
+            "The darkness can wait.", True, (171, 183, 190)
         )
-
-        center_y = (
-            self.screen.get_height()
-            // 2
-        )
-
-        # ==================================================
-        # PAUSED
-        # ==================================================
-
-        paused_text = self.pause_font.render(
-            "PAUSED",
-            True,
-            (255, 255, 255)
-        )
-
         self.screen.blit(
-            paused_text,
-            (
-                center_x
-                - paused_text.get_width()
-                // 2,
-                center_y - 100
+            subtitle,
+            (panel.centerx - subtitle.get_width() // 2, panel.top + 72)
+        )
+
+        button_width = min(310, panel.width - 46)
+        button_height = 52
+        button_gap = 15
+        first_y = panel.top + 125
+        button_specs = (
+            ("resume", "RESUME", (35, 73, 53), (119, 198, 133)),
+            ("restart", "RESTART RUN", (78, 53, 29), (241, 185, 91)),
+            ("quit", "QUIT GAME", (69, 35, 36), (208, 113, 102)),
+        )
+        mouse_pos = pygame.mouse.get_pos()
+        self.pause_menu_buttons = {}
+
+        for index, (key, label, fill, border) in enumerate(button_specs):
+            button = pygame.Rect(
+                panel.centerx - button_width // 2,
+                first_y + index * (button_height + button_gap),
+                button_width,
+                button_height
             )
-        )
+            self.pause_menu_buttons[key] = button
+            hover = button.collidepoint(mouse_pos)
+            actual_fill = tuple(min(255, channel + 16) for channel in fill) if hover else fill
 
-        # ==================================================
-        # RESUME
-        # ==================================================
+            pygame.draw.rect(self.screen, (3, 6, 9), button.move(2, 3))
+            pygame.draw.rect(self.screen, actual_fill, button)
+            pygame.draw.rect(self.screen, border, button, 2)
+            pygame.draw.rect(self.screen, (94, 78, 60), button.inflate(-6, -6), 1)
 
-        resume_text = self.pause_small_font.render(
-            "ESC  -  RESUME",
-            True,
-            (120, 220, 120)
-        )
-
-        self.screen.blit(
-            resume_text,
-            (
-                center_x
-                - resume_text.get_width()
-                // 2,
-                center_y
+            label_surface = self.pause_small_font.render(
+                label, True, (244, 238, 223)
             )
-        )
-
-        # ==================================================
-        # QUIT
-        # ==================================================
-
-        quit_text = self.pause_small_font.render(
-            "Q  -  QUIT",
-            True,
-            (220, 100, 100)
-        )
-
-        self.screen.blit(
-            quit_text,
-            (
-                center_x
-                - quit_text.get_width()
-                // 2,
-                center_y + 45
+            self.screen.blit(
+                label_surface,
+                (
+                    button.centerx - label_surface.get_width() // 2,
+                    button.centery - label_surface.get_height() // 2
+                )
             )
+
+        hint = pygame.font.Font(None, 19).render(
+            "ESC  RESUME     R  RESTART     Q  QUIT",
+            True,
+            (154, 163, 168)
+        )
+        self.screen.blit(
+            hint,
+            (panel.centerx - hint.get_width() // 2, panel.bottom - 28)
         )
 
     # ======================================================
@@ -956,7 +1002,8 @@ class Game:
         self.hud.render(
             self.screen,
             self.player,
-            self.enemies
+            self.enemies,
+            self.player.inventory
         )
 
         # ==================================================
