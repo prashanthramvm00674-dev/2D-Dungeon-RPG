@@ -115,6 +115,7 @@ def main():
     game.dt = 1.0
     game.update()
     assert game.wave_manager.spawn_timer == old_wave_timer
+    game.render()
     press(game, pygame.K_j)
     assert not game.quest_ui.visible
 
