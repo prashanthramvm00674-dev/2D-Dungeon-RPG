@@ -11,8 +11,6 @@ class InventoryUI:
         self.visible = False
 
         self.selected_slot = -1
-        self._last_clicked_slot = None
-        self._last_click_time_ms = 0
         self.hovered_slot = -1
         self._last_clicked_slot = None
         self._last_click_time_ms = 0
@@ -61,6 +59,8 @@ class InventoryUI:
         self.visible = False
 
         self.selected_slot = -1
+        self._last_clicked_slot = None
+        self._last_click_time_ms = 0
 
     # ==================================================
     # CHECK EQUIPPED
