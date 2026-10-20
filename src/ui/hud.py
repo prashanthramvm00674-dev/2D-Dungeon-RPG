@@ -1,5 +1,7 @@
 import pygame
 
+from ui.item_icons import draw_item_icon
+
 
 class HUD:
     """Dark-fantasy pixel-styled HUD matching the target composition."""
@@ -17,6 +19,7 @@ class HUD:
     def __init__(self):
         self._font_cache = {}
         self.menu_button_rect = pygame.Rect(0, 0, 0, 0)
+        self.hotbar_rects = []
 
     def _font(self, size, bold=False):
         key = (int(size), bool(bold))
@@ -266,7 +269,7 @@ class HUD:
                 (tick_x, inner.bottom - 1), 1
             )
 
-    def render(self, screen, player, enemies):
+    def render(self, screen, player, enemies, inventory=None):
         width, height = screen.get_size()
         scale = max(0.65, min(1.0, width / 1600, height / 900))
         u = lambda value: max(1, int(value * scale))
@@ -360,6 +363,7 @@ class HUD:
         first_x = (width - total_width) // 2
         slot_y = height - u(110)
 
+        self.hotbar_rects = []
         for index in range(slot_count):
             slot_rect = pygame.Rect(
                 first_x + index * (slot_size + slot_gap),
@@ -367,8 +371,65 @@ class HUD:
                 slot_size,
                 slot_size
             )
+            self.hotbar_rects.append(slot_rect)
             self._frame(screen, slot_rect, (7, 13, 19))
 
+            # Number key and small brass index identify each quick slot.
+            key_label = self._font(u(12), bold=True).render(
+                str(index + 1), True, (201, 150, 76)
+            )
+            screen.blit(
+                key_label,
+                (slot_rect.x + u(5), slot_rect.y + u(3))
+            )
+
+            slot = (
+                inventory.slots[index]
+                if inventory is not None and index < inventory.max_slots
+                else None
+            )
+            if slot is None:
+                # Recessed empty slots are still visually distinct, not plain
+                # black rectangles.
+                pygame.draw.line(
+                    screen, (25, 35, 43),
+                    (slot_rect.x + u(13), slot_rect.bottom - u(10)),
+                    (slot_rect.right - u(13), slot_rect.bottom - u(10)), 1
+                )
+                continue
+
+            item = slot["item"]
+            icon_rect = pygame.Rect(
+                slot_rect.x + u(13),
+                slot_rect.y + u(10),
+                slot_rect.width - u(26),
+                slot_rect.height - u(24)
+            )
+            draw_item_icon(screen, item, icon_rect)
+
+            quantity = slot["quantity"]
+            quantity_label = self._font(u(13), bold=True).render(
+                f"x{quantity}", True, (255, 220, 145)
+            )
+            quantity_bg = pygame.Rect(
+                slot_rect.right - quantity_label.get_width() - u(7),
+                slot_rect.bottom - quantity_label.get_height() - u(5),
+                quantity_label.get_width() + u(4),
+                quantity_label.get_height() + u(2)
+            )
+            pygame.draw.rect(screen, (5, 9, 14), quantity_bg)
+            screen.blit(
+                quantity_label,
+                (quantity_bg.x + u(2), quantity_bg.y + 1)
+            )
+
     def menu_button_contains(self, position):
-        """Return whether a click landed on the HUD inventory/menu button."""
+        """Return whether a click landed on the HUD pause/menu button."""
         return self.menu_button_rect.collidepoint(position)
+
+    def hotbar_slot_at(self, position):
+        """Return the quick-slot index clicked, or None when outside the bar."""
+        for index, rect in enumerate(self.hotbar_rects):
+            if rect.collidepoint(position):
+                return index
+        return None
