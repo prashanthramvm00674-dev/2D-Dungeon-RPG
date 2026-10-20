@@ -114,7 +114,7 @@ class WaveManager:
                 self.spawn_timer = self.spawn_interval
             else:
                 self.spawn_timer = max(0.0, self.spawn_timer - dt)
-                if self.spawn_timer <= 0.0:
+                if self.spawn_timer <= 1e-9:
                     enemy_type = self.pending_enemy_types.pop(0)
                     spawn_enemy(enemy_type, self.spawned_this_wave)
                     self.spawned_this_wave += 1
