@@ -28,7 +28,7 @@ class AshenWarden:
         """Return short, useful dialogue matched to the current run state."""
         if wave_manager.is_victory or quest_manager.completed:
             return (
-                "The four waves have fallen, and the Ember Core is quiet once more.",
+                "The Ashen Titan has fallen, and the Ember Core is quiet once more.",
                 "You have broken the seal's hold on these halls. The dungeon can finally rest.",
                 "The Dungeon Purge is complete. Carry its light beyond these walls.",
             )
