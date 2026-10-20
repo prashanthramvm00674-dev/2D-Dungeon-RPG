@@ -34,6 +34,9 @@ jobs:
       - name: Smoke-test graphics pipeline
         run: python tests/test_visual_rendering.py
 
+      - name: Test scene post-processing
+        run: python tests/test_post_processing.py
+
       - name: Test mouse coordinate normalization on scaled displays
         run: python tests/test_mouse_coordinates.py
 
