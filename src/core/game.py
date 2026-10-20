@@ -1106,6 +1106,10 @@ class Game:
             f"ALL {self.wave_manager.total_waves} WAVES DEFEATED",
             True, (231, 225, 210)
         )
+        quest_reward_text = self.game_over_small_font.render(
+            f"QUEST COMPLETE  +{self.quest_manager.REWARD_XP} XP",
+            True, (132, 207, 143)
+        )
         restart_text = self.game_over_small_font.render(
             "R  -  RESTART", True, (255, 255, 255)
         )
@@ -1122,10 +1126,14 @@ class Game:
             subtitle, (center_x - subtitle.get_width() // 2, center_y - 35)
         )
         self.screen.blit(
-            restart_text, (center_x - restart_text.get_width() // 2, center_y + 30)
+            quest_reward_text,
+            (center_x - quest_reward_text.get_width() // 2, center_y + 8)
         )
         self.screen.blit(
-            quit_text, (center_x - quit_text.get_width() // 2, center_y + 72)
+            restart_text, (center_x - restart_text.get_width() // 2, center_y + 48)
+        )
+        self.screen.blit(
+            quit_text, (center_x - quit_text.get_width() // 2, center_y + 88)
         )
 
     # ======================================================
