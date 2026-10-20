@@ -42,6 +42,7 @@ class DungeonTextures:
         self.floor_tiles = {}
         self.floor_region_cache = {}
         self.wall_tiles = {}
+        self.void_tiles = {}
         self.moss_patch_cache = {}
 
     @staticmethod
@@ -294,6 +295,94 @@ class DungeonTextures:
                     )
 
         return surface
+
+    def get_void_tile(self, variant=0):
+        """Return a cached slate-rubble tile for uncarved areas between rooms."""
+        variant = int(variant) % 24
+        if variant not in self.void_tiles:
+            self.void_tiles[variant] = self._create_void_tile(variant)
+        return self.void_tiles[variant]
+
+    def _create_void_tile(self, variant):
+        """
+        Create subdued grey-blue rubble rather than an empty near-black cell.
+
+        These cells remain solid for collision and pathfinding; this texture is
+        purely environmental, suggesting fallen slate and rough cavern floor.
+        """
+        rng = random.Random(self.seed + 45017 + variant * 2371)
+        size = self.TILE_SIZE
+        tile = pygame.Surface((size, size))
+        tile.fill((25, 33, 39))
+
+        # Deep joints frame the tile without creating a bright, obvious grid.
+        pygame.draw.lines(
+            tile, (13, 19, 24), False,
+            [(0, 0), (size - 1, 0), (size - 1, size - 1)], 2
+        )
+        pygame.draw.lines(
+            tile, (49, 59, 65), False,
+            [(1, 1), (size - 3, 1), (size - 3, size - 3)], 1
+        )
+
+        # Three to five fractured slate fragments create varied, stony texture.
+        palette = (
+            (31, 42, 49),
+            (36, 47, 54),
+            (41, 51, 57),
+            (45, 54, 60),
+            (34, 44, 51),
+            (48, 56, 61),
+        )
+        for _ in range(rng.randint(3, 5)):
+            cx = rng.randint(7, size - 8)
+            cy = rng.randint(7, size - 8)
+            rx = rng.randint(4, 11)
+            ry = rng.randint(3, 8)
+            points = [
+                (self._clamp(cx - rx, 1, size - 2), self._clamp(cy - ry // 2, 1, size - 2)),
+                (self._clamp(cx - rx // 2, 1, size - 2), self._clamp(cy - ry, 1, size - 2)),
+                (self._clamp(cx + rx, 1, size - 2), self._clamp(cy - ry // 3, 1, size - 2)),
+                (self._clamp(cx + rx // 2, 1, size - 2), self._clamp(cy + ry, 1, size - 2)),
+                (self._clamp(cx - rx // 2, 1, size - 2), self._clamp(cy + ry // 2, 1, size - 2)),
+            ]
+            pygame.draw.polygon(tile, (15, 22, 28), [(x + 1, y + 2) for x, y in points])
+            pygame.draw.polygon(tile, rng.choice(palette), points)
+            pygame.draw.lines(tile, (61, 71, 76), False, points[:3], 1)
+            pygame.draw.lines(tile, (20, 28, 34), False, points[2:], 1)
+
+        # Fine pale chips and dark gravel give the recesses a natural texture.
+        for _ in range(rng.randint(18, 32)):
+            px = rng.randint(2, size - 3)
+            py = rng.randint(2, size - 3)
+            color = rng.choice((
+                (17, 25, 31),
+                (23, 32, 38),
+                (53, 62, 67),
+                (59, 67, 71),
+            ))
+            width = rng.choice((1, 1, 2, 3))
+            pygame.draw.rect(tile, color, (px, py, width, rng.choice((1, 2))))
+
+        # Occasional short fractures keep some cells from looking too uniform.
+        if rng.random() < 0.72:
+            cx = rng.randint(8, size - 9)
+            cy = rng.randint(8, size - 9)
+            direction = rng.choice((-1, 1))
+            crack = [
+                (cx, cy),
+                (cx + direction * 2, cy + 3),
+                (cx - direction, cy + 6),
+                (cx + direction * 3, cy + 9),
+            ]
+            pygame.draw.lines(tile, (14, 22, 28), False, crack, 2)
+            if rng.random() < 0.5:
+                pygame.draw.lines(tile, (65, 73, 76), False, crack[:2], 1)
+
+        # Dusty, lightly lifted upper edge and shaded lower edge.
+        pygame.draw.line(tile, (45, 55, 61), (3, 2), (size - 5, 2), 1)
+        pygame.draw.line(tile, (17, 24, 29), (2, size - 2), (size - 2, size - 2), 2)
+        return tile
 
     def get_wall_tile(self, variant=0):
         """Return a cached 40x40 wall texture."""
