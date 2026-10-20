@@ -79,7 +79,7 @@ class ScenePostProcessor:
         if cached is not None:
             return cached
 
-        tone = pygame.Surface(size).convert()
+        tone = pygame.Surface(size, depth=32)
         tone.fill(self.TONE_MULTIPLIER)
         lift = pygame.Surface(size).convert()
         lift.fill(self.SHADOW_LIFT)
