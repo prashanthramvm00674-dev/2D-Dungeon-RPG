@@ -2,7 +2,7 @@ name: Dungeon regression checks
 
 on:
   push:
-    branches: [main, feature/enemy-waves, feature/dungeon-quest, feature/ashen-warden-dialogue, feature/dungeon-boss-encounter]
+    branches: [main, feature/enemy-waves, feature/dungeon-quest, feature/ashen-warden-dialogue, feature/dungeon-boss-encounter, feature/polish-persistence]
   workflow_dispatch:
 
 permissions:
@@ -51,6 +51,9 @@ jobs:
 
       - name: Test Ashen Titan combat and rendering
         run: python tests/test_boss_encounter.py
+
+      - name: Test save/load and persistent settings
+        run: python tests/test_persistence.py
 
       - name: Test dungeon quest progression and reward
         run: python tests/test_quest_manager.py
