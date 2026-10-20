@@ -99,6 +99,28 @@ def main():
     )
     assert world.collides_with_wall(void_rect), "Uncarved void must be solid"
 
+    # Void cells touching the walkable map should receive a visible masonry
+    # edge instead of exposing rubble along room/corridor boundaries.
+    boundary_void_tiles = [
+        (column, row)
+        for row in range(1, world.rows - 1)
+        for column in range(1, world.columns - 1)
+        if world.tiles[row][column] == World.VOID
+        and world.is_void_boundary(column, row)
+    ]
+    assert boundary_void_tiles, "Expected exposed floor/void boundaries"
+
+    for column, row in boundary_void_tiles:
+        assert world.tiles[row][column] == World.VOID
+        assert world.collides_with_wall(
+            pygame.Rect(
+                column * world.TILE_SIZE,
+                row * world.TILE_SIZE,
+                world.TILE_SIZE,
+                world.TILE_SIZE
+            )
+        ), "Visual edge masking must not make VOID walkable"
+
     pygame.quit()
     print(
         "Dungeon generation checks passed: "
