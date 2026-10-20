@@ -34,8 +34,14 @@ jobs:
       - name: Smoke-test graphics pipeline
         run: python tests/test_visual_rendering.py
 
+      - name: Test mouse coordinate normalization on scaled displays
+        run: python tests/test_mouse_coordinates.py
+
       - name: Test inventory interactions and hotbar
         run: python tests/test_inventory_ui.py
 
-      - name: Test pause menu and live hotbar integration
+      - name: Test dropped potion bottle rendering
+        run: python tests/test_loot_rendering.py
+
+      - name: Test pause menu, fullscreen controls, and live hotbar integration
         run: python tests/test_game_ui_integration.py
