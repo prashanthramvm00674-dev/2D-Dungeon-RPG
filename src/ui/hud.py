@@ -299,8 +299,13 @@ class HUD:
         self._frame(screen, info_rect)
         self._draw_skull_badge(screen, badge_rect)
 
+        wave_label = (
+            "BOSS ENCOUNTER"
+            if wave_manager is not None and wave_manager.is_boss
+            else f"WAVE {wave_number} / {total_waves}"
+        )
         wave = self._font(u(20), bold=True).render(
-            f"WAVE {wave_number} / {total_waves}", True, self.GOLD
+            wave_label, True, self.GOLD
         )
         enemies_label = self._font(u(15)).render(
             f"ENEMIES: {enemies_remaining}", True, self.TEXT
