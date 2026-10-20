@@ -701,7 +701,6 @@ class InventoryUI:
                 rect.inflate(-6, -6),
                 1
             )
-            )
 
             # ==================================================
             # ITEM
@@ -752,9 +751,9 @@ class InventoryUI:
                 (255, 215, 126)
             )
             quantity_bg = pygame.Rect(
-                rect.right - quantity_text.get_width() - 8,
-                rect.bottom - 19,
-                quantity_text.get_width() + 5,
+                rect.right - quantity_text.get_width() - 5,
+                y + 30,
+                quantity_text.get_width() + 4,
                 15
             )
             pygame.draw.rect(screen, (6, 11, 16), quantity_bg)
