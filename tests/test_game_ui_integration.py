@@ -18,15 +18,26 @@ def click(game, position, clicks=1):
     game.handle_events()
 
 
-def press(game, key):
-    pygame.event.post(pygame.event.Event(pygame.KEYDOWN, {"key": key}))
+def press(game, key, mod=0):
+    pygame.event.post(
+        pygame.event.Event(pygame.KEYDOWN, {"key": key, "mod": mod})
+    )
     game.handle_events()
 
 
 def main():
     game = Game()
 
-    # Windowed startup makes screen capture accessible without requiring F11.
+    # Windowed startup makes screen capture accessible, while both keyboard
+    # routes remain available for returning to immersive fullscreen.
+    assert not game.fullscreen
+    press(game, pygame.K_RETURN, pygame.KMOD_ALT)
+    assert game.fullscreen
+    press(game, pygame.K_RETURN, pygame.KMOD_ALT)
+    assert not game.fullscreen
+    press(game, pygame.K_F11)
+    assert game.fullscreen
+    press(game, pygame.K_F11)
     assert not game.fullscreen
 
     # Populate the HUD hitboxes first, just like the real first frame.
@@ -38,7 +49,16 @@ def main():
     assert game.paused
     assert not game.inventory_ui.visible
     game.render()
-    assert {"resume", "restart", "quit"} <= set(game.pause_menu_buttons)
+    assert {"resume", "restart", "fullscreen", "quit"} <= set(game.pause_menu_buttons)
+
+    # The pause menu itself can enter and exit fullscreen when function keys
+    # are unavailable on the user's keyboard.
+    click(game, game.pause_menu_buttons["fullscreen"].center)
+    assert game.fullscreen
+    game.render()
+    click(game, game.pause_menu_buttons["fullscreen"].center)
+    assert not game.fullscreen
+    game.render()
 
     # Resume is a real clickable action.
     click(game, game.pause_menu_buttons["resume"].center)
@@ -73,7 +93,12 @@ def main():
     assert game.player.health == 50
     assert game.player.inventory.get_item_count(HEALTH_POTION) == 2
 
-    click(game, potion_rect.center, clicks=2)
+    # Two ordinary mouse-down events must work even if Pygame omits a
+    # native "clicks" field from its real mouse event.
+    click(game, potion_rect.center)
+    assert game.player.health == 50
+    assert game.player.inventory.get_item_count(HEALTH_POTION) == 2
+    click(game, potion_rect.center)
     assert game.player.health == 75
     assert game.player.inventory.get_item_count(HEALTH_POTION) == 1
 
