@@ -10,6 +10,7 @@ class InventoryUI:
         self.visible = False
 
         self.selected_slot = -1
+        self.hovered_slot = -1
 
         self.font = pygame.font.Font(
             None,
@@ -447,6 +448,33 @@ class InventoryUI:
             ),
         }
 
+    def _slot_rect(self, index, layout):
+        """Return the exact on-screen rectangle used to draw and click a slot."""
+        row = index // layout["columns"]
+        column = index % layout["columns"]
+        slot_size = layout["slot_size"]
+        gap = layout["gap"]
+        return pygame.Rect(
+            layout["slot_start_x"] + column * (slot_size + gap),
+            layout["slot_start_y"] + row * (slot_size + gap),
+            slot_size,
+            slot_size
+        )
+
+    def activate_item(self, item, player, inventory):
+        """Activate a selected item from a mouse double-click."""
+        if item is None:
+            return False
+
+        if item.item_type == "consumable":
+            return self.use_item(item, player, inventory)
+
+        if item.item_type in ("weapon", "armor"):
+            self.equip_or_unequip(item, player)
+            return True
+
+        return False
+
     # ==================================================
     # HANDLE CLICK
     # ==================================================
@@ -456,18 +484,12 @@ class InventoryUI:
         mouse_position,
         inventory,
         player,
-        screen_size=None
+        screen_size=None,
+        click_count=1
     ):
-
+        """Handle inventory slot selection and mouse-accessible item actions."""
         if not self.visible:
-
-            return
-
-        mouse_x, mouse_y = mouse_position
-
-        # ==================================================
-        # INVENTORY SLOTS
-        # ==================================================
+            return False
 
         if screen_size is None:
             screen_size = getattr(
@@ -477,87 +499,36 @@ class InventoryUI:
             )
 
         layout = self._calculate_layout(screen_size)
-        start_x = layout["slot_start_x"]
-        start_y = layout["slot_start_y"]
-        slot_size = layout["slot_size"]
-        gap = layout["gap"]
-        columns = layout["columns"]
+        mouse_x, mouse_y = mouse_position
 
-        for index in range(
-            inventory.max_slots
-        ):
-
-            row = index // columns
-            column = index % columns
-
-            x = (
-                start_x
-                + column
-                * (slot_size + gap)
-            )
-
-            y = (
-                start_y
-                + row
-                * (slot_size + gap)
-            )
-
-            rect = pygame.Rect(
-                x,
-                y,
-                slot_size,
-                slot_size
-            )
-
-            if rect.collidepoint(
-                mouse_x,
-                mouse_y
-            ):
-
+        # Slot drawing and hit testing share the same geometry. The small
+        # tolerance includes the visible metal edge and its drop shadow.
+        for index in range(inventory.max_slots):
+            rect = self._slot_rect(index, layout)
+            if rect.inflate(8, 8).collidepoint(mouse_x, mouse_y):
                 self.selected_slot = index
-
                 slot = inventory.slots[index]
 
-                if slot is None:
+                if slot is not None and click_count >= 2:
+                    self.activate_item(
+                        slot["item"],
+                        player,
+                        inventory
+                    )
+                return True
 
-                    return
-
-                # Selection is non-destructive. The user must choose USE or
-                # press U before consuming a potion, so browsing can't delete it.
-                return
-
-        # ==================================================
-        # EQUIP BUTTON
-        # ==================================================
-
+        # The action button is also a full mouse target. A single click on a
+        # slot selects it; the button performs USE/EQUIP, and double-clicking
+        # a populated slot performs the same primary action directly.
         button_rect = layout["button_rect"]
-
-        if button_rect.collidepoint(
-            mouse_x,
-            mouse_y
-        ):
-
-            if (
-                self.selected_slot >= 0
-                and self.selected_slot
-                < inventory.max_slots
-            ):
-
-                slot = inventory.slots[
-                    self.selected_slot
-                ]
-
+        if button_rect.collidepoint(mouse_x, mouse_y):
+            if 0 <= self.selected_slot < inventory.max_slots:
+                slot = inventory.slots[self.selected_slot]
                 if slot is not None:
+                    self.activate_item(slot["item"], player, inventory)
+            return True
 
-                    item = slot["item"]
-
-                    if (
-                        item.item_type == "weapon"
-                        or item.item_type == "armor"
-                    ):
-                        self.equip_or_unequip(item, player)
-                    elif item.item_type == "consumable":
-                        self.use_item(item, player, inventory)
+        return False
 
     # ==================================================
     # RENDER
@@ -653,32 +624,20 @@ class InventoryUI:
         slot_size = layout["slot_size"]
         gap = layout["gap"]
         columns = layout["columns"]
+        self.hovered_slot = -1
+        mouse_position = pygame.mouse.get_pos()
 
         for index in range(
             inventory.max_slots
         ):
 
-            row = index // columns
-            column = index % columns
-
-            x = (
-                start_x
-                + column
-                * (slot_size + gap)
+            rect = self._slot_rect(index, layout)
+            x, y = rect.topleft
+            hovered = rect.inflate(8, 8).collidepoint(
+                pygame.mouse.get_pos()
             )
-
-            y = (
-                start_y
-                + row
-                * (slot_size + gap)
-            )
-
-            rect = pygame.Rect(
-                x,
-                y,
-                slot_size,
-                slot_size
-            )
+            if hovered:
+                self.hovered_slot = index
 
             # ==================================================
             # SELECTED
@@ -686,12 +645,12 @@ class InventoryUI:
 
             pygame.draw.rect(
                 screen,
-                (49, 41, 27) if index == self.selected_slot else (16, 25, 34),
+                (49, 41, 27) if index == self.selected_slot else ((34, 40, 46) if hovered else (16, 25, 34)),
                 rect
             )
             pygame.draw.rect(
                 screen,
-                (246, 190, 91) if index == self.selected_slot else (120, 83, 45),
+                (246, 190, 91) if index == self.selected_slot else ((171, 186, 194) if hovered else (120, 83, 45)),
                 rect,
                 2
             )
