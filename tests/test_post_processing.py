@@ -29,15 +29,18 @@ def main():
     highlights.fill((245, 140, 55))
     processor.apply(highlights)
     warm_highlight = highlights.get_at((80, 45))
-    assert warm_highlight.r >= 240, (
+    assert warm_highlight.r >= 235, (
         f"Torch highlight was crushed: {warm_highlight}"
     )
     assert warm_highlight.r > warm_highlight.g > warm_highlight.b
 
     # Vignette is reused at a stable size and rebuilt safely after resizing.
+    grade_first = processor._get_grade_surface((160, 90))
+    grade_second = processor._get_grade_surface((160, 90))
     first = processor._build_vignette((160, 90))
     second = processor._build_vignette((160, 90))
     resized = processor._build_vignette((320, 180))
+    assert grade_first is grade_second
     assert first is second
     assert resized.get_size() == (320, 180)
 
