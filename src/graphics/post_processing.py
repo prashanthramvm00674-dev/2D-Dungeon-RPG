@@ -4,53 +4,44 @@ import pygame
 
 
 class ScenePostProcessor:
-    """Lightweight, real-time finishing pass for the rendered dungeon scene.
+    """Lightweight finishing pass for the rendered dungeon scene.
 
-    The pass is deliberately non-destructive: it adjusts only the current
-    display surface, does not rescale or blur pixel art, and runs before the
-    HUD so interface text and borders remain sharp and unchanged.
-
-    The tone lift recovers a little shadow detail without washing out torch
-    highlights. A cached low-resolution vignette gently directs attention
-    toward the playable center without expensive per-frame pixel processing.
+    A camera-inspired grade gently recovers shadow detail and a soft vignette
+    focuses attention toward the playable center. The effect leaves pixel art
+    unscaled and unblurred, and is drawn before UI so HUD elements remain crisp.
+    The two effects are pre-composed into one cached overlay to minimize the
+    cost of full-screen blending on lower-powered hardware.
     """
 
-    # A very transparent cool highlight overlay gives dark areas a gentle
-    # shadow lift while keeping vivid amber torch lights recognizable.
     TONE_TINT = (135, 145, 160)
     TONE_ALPHA = 18
-
-    # Subtle maximum opacity at the extreme corners; the middle stays clear.
     VIGNETTE_MAX_ALPHA = 20
     VIGNETTE_START_RADIUS = 0.58
 
     def __init__(self):
-        self._vignette_cache = {}
-        self._grade_surface_cache = {}
+        self._overlay_cache = {}
 
-    def _build_vignette(self, size):
-        """Build a soft elliptical vignette once for a given display size."""
+    def _build_overlay(self, size):
+        """Build the combined alpha grade/vignette once per display size."""
         width, height = size
         if width <= 0 or height <= 0:
             raise ValueError("Post-processing needs a positive display size.")
 
-        cache_key = (width, height)
-        cached = self._vignette_cache.get(cache_key)
+        cached = self._overlay_cache.get(size)
         if cached is not None:
             return cached
 
-        # Build at quarter resolution and scale once. This keeps setup light
-        # even if the user changes between windowed and fullscreen modes.
+        # Vignettes are smooth gradients, so quarter-resolution generation
+        # looks clean once scaled and avoids hundreds of thousands of Python
+        # pixel operations when the user switches to fullscreen.
         low_width = max(48, min(width, width // 4))
         low_height = max(36, min(height, height // 4))
-        vignette = pygame.Surface(
-            (low_width, low_height),
-            pygame.SRCALPHA,
-            32
-        )
-        pixels = pygame.PixelArray(vignette)
+        overlay = pygame.Surface((low_width, low_height), pygame.SRCALPHA, 32)
+        pixels = pygame.PixelArray(overlay)
+
         max_radius = math.sqrt(2.0)
         span = max(0.001, max_radius - self.VIGNETTE_START_RADIUS)
+        grade_fraction = self.TONE_ALPHA / 255.0
 
         for y in range(low_height):
             ny = ((y / max(1, low_height - 1)) - 0.5) * 2.0
@@ -61,36 +52,39 @@ class ScenePostProcessor:
                     0.0,
                     min(1.0, (radius - self.VIGNETTE_START_RADIUS) / span)
                 )
-                # Smoothstep avoids a visible ring or abrupt boundary.
+                # Smoothstep creates a gradual edge instead of a visible ring.
                 amount = amount * amount * (3.0 - 2.0 * amount)
-                alpha = int(round(self.VIGNETTE_MAX_ALPHA * amount))
-                pixels[x, y] = (0, 0, 0, alpha)
+                vignette_fraction = (
+                    self.VIGNETTE_MAX_ALPHA * amount / 255.0
+                )
+
+                # Compose the translucent cool grade followed by black
+                # vignette into one equivalent RGBA pixel:
+                # alpha = vignette + grade * (1 - vignette).
+                total_alpha = (
+                    vignette_fraction
+                    + grade_fraction * (1.0 - vignette_fraction)
+                )
+                alpha_byte = int(round(total_alpha * 255))
+                grade_contribution = (
+                    grade_fraction * (1.0 - vignette_fraction)
+                )
+                color_ratio = (
+                    grade_contribution / total_alpha
+                    if total_alpha > 0
+                    else 0.0
+                )
+                red, green, blue = (
+                    int(round(channel * color_ratio))
+                    for channel in self.TONE_TINT
+                )
+                pixels[x, y] = (red, green, blue, alpha_byte)
 
         del pixels
-        vignette = pygame.transform.smoothscale(vignette, size)
-        self._vignette_cache[cache_key] = vignette
-        return vignette
-
-    def _get_grade_surface(self, size):
-        """Cache a translucent color-grade surface for the current viewport."""
-        cached = self._grade_surface_cache.get(size)
-        if cached is not None:
-            return cached
-
-        grade = pygame.Surface(size, pygame.SRCALPHA, 32)
-        grade.fill((*self.TONE_TINT, self.TONE_ALPHA))
-        self._grade_surface_cache[size] = grade
-        return grade
+        overlay = pygame.transform.smoothscale(overlay, size)
+        self._overlay_cache[size] = overlay
+        return overlay
 
     def apply(self, screen):
-        """Apply a gentle shadow-recovery grade and a cached soft vignette."""
-        # Both are cached full-screen blits: no per-frame allocation, rescaling,
-        # NumPy dependency, or Python-level pixel loop.
-        screen.blit(
-            self._get_grade_surface(screen.get_size()),
-            (0, 0)
-        )
-        screen.blit(
-            self._build_vignette(screen.get_size()),
-            (0, 0)
-        )
+        """Apply the cached finishing overlay with one full-screen blit."""
+        screen.blit(self._build_overlay(screen.get_size()), (0, 0))
