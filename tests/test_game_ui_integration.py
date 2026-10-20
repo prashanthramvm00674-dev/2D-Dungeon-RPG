@@ -119,6 +119,41 @@ def main():
     press(game, pygame.K_j)
     assert not game.quest_ui.visible
 
+    # The Ashen Warden is placed on connected floor and speaks only at close range.
+    spawn_state = (game.player.x, game.player.y, game.player.rect.topleft)
+    spawn_tile = (
+        game.player.rect.x // game.world.TILE_SIZE,
+        game.player.rect.y // game.world.TILE_SIZE,
+    )
+    npc_tile = (
+        game.npc.rect.centerx // game.world.TILE_SIZE,
+        game.npc.rect.centery // game.world.TILE_SIZE,
+    )
+    assert not game.world.collides_with_wall(game.npc.rect)
+    assert game.world.find_path(spawn_tile, npc_tile)
+
+    game.player.rect.center = game.npc.rect.center
+    game.player.x, game.player.y = game.player.rect.topleft
+    assert game.npc.is_in_range(game.player)
+    press(game, pygame.K_e)
+    assert game.dialogue_ui.visible
+    assert game.dialogue_ui.speaker == game.npc.NAME
+    dialogue_wave_timer = game.wave_manager.spawn_timer
+    game.dt = 1.0
+    game.update()
+    assert game.wave_manager.spawn_timer == dialogue_wave_timer
+    game.render()
+    press(game, pygame.K_e)
+    assert game.dialogue_ui.visible
+    assert game.dialogue_ui.line_index == 1
+    press(game, pygame.K_e)
+    press(game, pygame.K_e)
+    assert not game.dialogue_ui.visible
+
+    # Restore the player before continuing the combat regression checks.
+    game.player.x, game.player.y, player_rect_position = spawn_state
+    game.player.rect.topleft = player_rect_position
+
     # A wave ends only after every living enemy is defeated. The next wave
     # waits through its intermission, then queues/spawns reinforcements.
     for enemy in game.enemies:
