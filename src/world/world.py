@@ -589,6 +589,37 @@ class World:
         # Any uncarved tile is solid; only explicitly carved floor is walkable.
         return self.tiles[row][column] != self.FLOOR
 
+    def is_void_boundary(self, column, row):
+        """
+        Return True when a VOID cell borders a walkable floor cell.
+
+        This is a visual edge mask only: the tile remains VOID and therefore
+        solid. Drawing masonry over this edge prevents rubble from appearing
+        through gaps along the side of a chamber or corridor.
+        """
+        if (
+            column < 0 or column >= self.columns
+            or row < 0 or row >= self.rows
+            or self.tiles[row][column] != self.VOID
+        ):
+            return False
+
+        for offset_y in (-1, 0, 1):
+            for offset_x in (-1, 0, 1):
+                if offset_x == 0 and offset_y == 0:
+                    continue
+
+                neighbour_x = column + offset_x
+                neighbour_y = row + offset_y
+                if (
+                    0 <= neighbour_x < self.columns
+                    and 0 <= neighbour_y < self.rows
+                    and self.tiles[neighbour_y][neighbour_x] == self.FLOOR
+                ):
+                    return True
+
+        return False
+
     def find_path(self, start_tile, goal_tile):
         """
         Return a shortest four-direction path across carved FLOOR tiles.
@@ -737,14 +768,22 @@ class World:
                     self.TILE_SIZE
                 )
                 screen_rect = camera.apply(world_rect)
-                # These cells are unwalkable, but they should still read as
-                # physical cavern floor. Cached fractured slate replaces the
-                # large, flat black patches that previously broke immersion.
-                rubble_variant = (row * self.columns + column) % 24
-                rubble_texture = self.dungeon_textures.get_void_tile(
-                    rubble_variant
-                )
-                screen.blit(rubble_texture, screen_rect)
+                # Wherever rubble directly borders a chamber/corridor,
+                # draw a masonry edge block instead. This is visual-only:
+                # VOID stays solid, but its texture is concealed at exposed
+                # walkable edges so the wall perimeter reads as continuous.
+                if self.is_void_boundary(column, row):
+                    wall_variant = (row * self.columns + column) % 12
+                    edge_texture = self.dungeon_textures.get_wall_tile(
+                        wall_variant
+                    )
+                else:
+                    rubble_variant = (row * self.columns + column) % 24
+                    edge_texture = self.dungeon_textures.get_void_tile(
+                        rubble_variant
+                    )
+
+                screen.blit(edge_texture, screen_rect)
 
         # ==================================================
         # EXISTING MOSS PATCH OVERLAYS
