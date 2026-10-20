@@ -21,6 +21,7 @@ from graphics.post_processing import ScenePostProcessor
 
 from entities.player import Player
 from entities.enemy import Enemy
+from entities.npc import AshenWarden
 
 from entities.item import (
     HEALTH_POTION,
@@ -35,6 +36,7 @@ from world.world import World
 from ui.hud import HUD
 from ui.inventory_ui import InventoryUI
 from ui.quest_ui import QuestJournalUI
+from ui.dialogue_ui import DialogueUI
 
 
 def _enable_windows_dpi_awareness():
@@ -140,6 +142,9 @@ class Game:
         self.player.rect.x = spawn_x
         self.player.rect.y = spawn_y
 
+        # The Warden is placed on connected, clear floor near the safe spawn.
+        self.npc = AshenWarden(*self._find_npc_position(spawn_x, spawn_y))
+
         # ==================================================
         # STARTING INVENTORY
         # ==================================================
@@ -228,6 +233,7 @@ class Game:
         self.inventory_ui = InventoryUI()
         self.quest_manager = QuestManager()
         self.quest_ui = QuestJournalUI()
+        self.dialogue_ui = DialogueUI()
 
         # ==================================================
         # FONTS
@@ -336,11 +342,16 @@ class Game:
                         if self.hud.menu_button_contains(mouse_position):
                             self.inventory_ui.close()
                             self.quest_ui.close()
+                            self.dialogue_ui.close()
                             self.paused = True
                             continue
 
                         if self.quest_ui.visible:
                             # The journal is modal; ignore world/hotbar clicks.
+                            continue
+
+                        if self.dialogue_ui.visible:
+                            # Dialogue is modal; world and hotbar clicks are ignored.
                             continue
 
                         if self.inventory_ui.visible:
@@ -419,6 +430,17 @@ class Game:
                     continue
 
                 # ==================================================
+                # NPC DIALOGUE
+                # ==================================================
+
+                if self.dialogue_ui.visible:
+                    if event.key == pygame.K_ESCAPE:
+                        self.dialogue_ui.close()
+                    elif event.key in (pygame.K_e, pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                        self.dialogue_ui.advance()
+                    continue
+
+                # ==================================================
                 # INVENTORY
                 # ==================================================
 
@@ -477,11 +499,26 @@ class Game:
                     continue
 
                 # ==================================================
+                # NPC INTERACTION
+                # ==================================================
+
+                if event.key == pygame.K_e:
+                    if self.npc.is_in_range(self.player):
+                        self.dialogue_ui.open(
+                            self.npc.NAME,
+                            self.npc.dialogue_for(
+                                self.wave_manager, self.quest_manager
+                            ),
+                        )
+                    continue
+
+                # ==================================================
                 # OPEN MENU
                 # ==================================================
 
                 if event.key == pygame.K_ESCAPE:
                     self.inventory_ui.close()
+                    self.dialogue_ui.close()
                     self.paused = True
                     continue
 
@@ -498,6 +535,75 @@ class Game:
                 }
                 if event.key in hotkey_slots:
                     self.activate_hotbar_slot(hotkey_slots[event.key])
+
+    def _find_npc_position(self, spawn_x, spawn_y):
+        """Find a connected floor tile a short distance from the player spawn."""
+        tile_size = self.world.TILE_SIZE
+        origin = (int(spawn_x // tile_size), int(spawn_y // tile_size))
+        nearby = []
+
+        # Prefer a nearby tile in the same chamber, but confirm reachability
+        # through the dungeon's actual floor/corridor path graph.
+        for row in range(1, self.world.rows - 1):
+            for column in range(1, self.world.columns - 1):
+                if self.world.tiles[row][column] != self.world.FLOOR:
+                    continue
+
+                dx = column - origin[0]
+                dy = row - origin[1]
+                distance_squared = dx * dx + dy * dy
+                if distance_squared < 9 or distance_squared > 36:
+                    continue
+
+                npc_rect = pygame.Rect(
+                    column * tile_size + 4,
+                    row * tile_size + 2,
+                    32,
+                    36,
+                )
+                if self.world.collides_with_wall(npc_rect):
+                    continue
+
+                nearby.append(
+                    (distance_squared, abs(dy), row, column)
+                )
+
+        nearby.sort()
+        for _, _, row, column in nearby:
+            if self.world.find_path(origin, (column, row)):
+                return (column * tile_size + 4, row * tile_size + 2)
+
+        # Defensive fallback: search any connected floor tile if the central
+        # chamber is unusually small or altered by future dungeon generation.
+        fallback = []
+        for row in range(1, self.world.rows - 1):
+            for column in range(1, self.world.columns - 1):
+                if self.world.tiles[row][column] != self.world.FLOOR:
+                    continue
+                dx = column - origin[0]
+                dy = row - origin[1]
+                distance_squared = dx * dx + dy * dy
+                if distance_squared < 4:
+                    continue
+                npc_rect = pygame.Rect(
+                    column * tile_size + 4,
+                    row * tile_size + 2,
+                    32,
+                    36,
+                )
+                if not self.world.collides_with_wall(npc_rect):
+                    fallback.append(
+                        (distance_squared, abs(dy), row, column)
+                    )
+
+        fallback.sort()
+        for _, _, row, column in fallback:
+            if self.world.find_path(origin, (column, row)):
+                return (column * tile_size + 4, row * tile_size + 2)
+
+        # The generated dungeon always has connected floor, but keeping a
+        # final valid value makes construction robust against custom worlds.
+        return (spawn_x + tile_size * 3, spawn_y)
 
     def toggle_fullscreen(self):
         """Toggle immersive fullscreen and return to the last window size."""
@@ -566,7 +672,7 @@ class Game:
         # INVENTORY
         # ==================================================
 
-        if self.inventory_ui.visible or self.quest_ui.visible:
+        if self.inventory_ui.visible or self.quest_ui.visible or self.dialogue_ui.visible:
 
             return
 
@@ -802,6 +908,7 @@ class Game:
         self.wave_manager = WaveManager()
         self.quest_manager = QuestManager()
         self.quest_ui.close()
+        self.dialogue_ui.close()
         self.enemies = []
         enemy_types = self.wave_manager.initial_roster
         enemy_positions = self.world.get_edge_spawn_positions(
@@ -1189,6 +1296,12 @@ class Game:
             )
 
         # ==================================================
+        # NPC
+        # ==================================================
+
+        self.npc.render(self.screen, self.camera)
+
+        # ==================================================
         # PLAYER
         # ==================================================
 
@@ -1245,6 +1358,11 @@ class Game:
         # readable, and visually identical to the approved HUD design.
         self.post_processing.apply(self.screen)
 
+        # Draw the interaction hint after scene finishing so it remains crisp.
+        self.npc.render_interaction_prompt(
+            self.screen, self.camera, self.player
+        )
+
         # ==================================================
         # HUD
         # ==================================================
@@ -1275,6 +1393,8 @@ class Game:
             self.wave_manager,
             sum(not enemy.is_dead() for enemy in self.enemies),
         )
+
+        self.dialogue_ui.render(self.screen)
 
         # ==================================================
         # PAUSE MENU
