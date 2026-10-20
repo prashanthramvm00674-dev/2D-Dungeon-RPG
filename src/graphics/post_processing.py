@@ -81,7 +81,7 @@ class ScenePostProcessor:
 
         tone = pygame.Surface(size, depth=32)
         tone.fill(self.TONE_MULTIPLIER)
-        lift = pygame.Surface(size).convert()
+        lift = pygame.Surface(size, depth=32)
         lift.fill(self.SHADOW_LIFT)
         cached = (tone, lift)
         self._grade_surface_cache[size] = cached
