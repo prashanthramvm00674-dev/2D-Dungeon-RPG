@@ -737,12 +737,14 @@ class World:
                     self.TILE_SIZE
                 )
                 screen_rect = camera.apply(world_rect)
-                shade = (
-                    3 + (row * 3 + column) % 3,
-                    6 + (row + column * 2) % 4,
-                    10 + (row * 5 + column * 3) % 5
+                # These cells are unwalkable, but they should still read as
+                # physical cavern floor. Cached fractured slate replaces the
+                # large, flat black patches that previously broke immersion.
+                rubble_variant = (row * self.columns + column) % 24
+                rubble_texture = self.dungeon_textures.get_void_tile(
+                    rubble_variant
                 )
-                screen.fill(shade, screen_rect)
+                screen.blit(rubble_texture, screen_rect)
 
         # ==================================================
         # EXISTING MOSS PATCH OVERLAYS
