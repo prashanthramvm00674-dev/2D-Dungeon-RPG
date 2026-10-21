@@ -1,4 +1,5 @@
 import sys
+import tempfile
 from pathlib import Path
 
 import pygame
@@ -6,7 +7,9 @@ import pygame
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
+import core.game as game_module
 from core.game import Game
+from core.save_manager import SaveManager, SettingsManager
 from entities.item import HEALTH_POTION
 
 
@@ -26,6 +29,18 @@ def press(game, key, mod=0):
 
 
 def main():
+    # Keep the integration test independent from the developer's real saves
+    # and preferences. In particular, a previously saved fullscreen preference
+    # must not change the expected windowed startup state.
+    test_data = tempfile.TemporaryDirectory(prefix="dungeon-rpg-ui-test-")
+    test_data_path = Path(test_data.name)
+    game_module.SettingsManager = lambda: SettingsManager(
+        path=test_data_path / "settings.json"
+    )
+    game_module.SaveManager = lambda: SaveManager(
+        path=test_data_path / "save_slot_1.json"
+    )
+
     game = Game()
 
     # Windowed startup makes screen capture accessible, while both keyboard
@@ -249,6 +264,7 @@ def main():
     assert game.quest_manager.status == "active"
 
     pygame.quit()
+    test_data.cleanup()
     print(
         "Game UI integration passed: pause menu, inventory/hotbar, dialogue, "
         "waves, boss phase, boss rewards, victory, and restart."
