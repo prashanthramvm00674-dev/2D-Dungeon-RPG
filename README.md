@@ -11,7 +11,7 @@ An intermediate-to-advanced 2D Dungeon RPG built with Python and Pygame.
 
 ## Project Status
 
-🚧 Development
+packaging
 
 
 ## Current gameplay systems
