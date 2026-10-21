@@ -27,3 +27,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Generated test/preview screenshots
+tests/*.png
