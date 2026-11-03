@@ -1,0 +1,88 @@
+name: Windows release build
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    tags:
+      - "v*"
+permissions:
+  contents: read
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    name: Test and package Windows x64
+    runs-on: windows-latest
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+      PYGAME_HIDE_SUPPORT_PROMPT: "1"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install game dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Run full regression suite for manual builds and releases
+        if: github.event_name != 'pull_request'
+        run: python tests/run_regression.py --timeout 240
+      - name: Upload regression reports
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-release-test-reports
+          path: artifacts/test-reports/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Install packaging tool
+        run: python -m pip install pyinstaller
+      - name: Build standalone game
+        run: >
+          python -m PyInstaller
+          --noconfirm
+          --clean
+          --onedir
+          --windowed
+          --collect-all pygame
+          --name "2D-Dungeon-RPG"
+          --paths src
+          src/main.py
+      - name: Create distributable ZIP
+        run: |
+          python -c "from pathlib import Path; import shutil; Path('artifacts/release').mkdir(parents=True, exist_ok=True); shutil.make_archive('artifacts/release/2D-Dungeon-RPG-windows-x64', 'zip', root_dir='dist', base_dir='2D-Dungeon-RPG')"
+      - name: Upload Windows build artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: 2D-Dungeon-RPG-windows-x64
+          path: artifacts/release/2D-Dungeon-RPG-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30
+  publish:
+    name: Publish versioned GitHub Release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows build artifact
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: 2D-Dungeon-RPG-windows-x64
+          path: artifacts/release
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: artifacts/release/2D-Dungeon-RPG-windows-x64.zip
