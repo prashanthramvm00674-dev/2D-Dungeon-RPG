@@ -1,5 +1,7 @@
 # 2D Dungeon RPG
 
+[![Dungeon regression checks](https://github.com/prashanthramvm00674-dev/2D-Dungeon-RPG/actions/workflows/dungeon-regression.yml/badge.svg?branch=main)](https://github.com/prashanthramvm00674-dev/2D-Dungeon-RPG/actions/workflows/dungeon-regression.yml)
+
 An intermediate-to-advanced 2D Dungeon RPG built with Python and Pygame.
 
 ## Technology
@@ -13,7 +15,6 @@ An intermediate-to-advanced 2D Dungeon RPG built with Python and Pygame.
 
 packaging
 
-
 ## Current gameplay systems
 
 - Procedural, enclosed dungeon rooms and connected corridors.
@@ -22,7 +23,7 @@ packaging
 - Boss combat features a dedicated health bar, a dodgeable targeted slam, and a phase-two shockwave.
 - Manual saves preserve player stats, inventory/equipment, wave progress, enemies, loot, quest status, and boss attack state.
 - Open the pause menu with **Esc** to save/load or open **Settings**; **F5** saves and **F9** loads the current slot.
-- Settings remember fullscreen preference, dungeon lighting, scene finishing, and save-on-exit. Saves and settings are stored locally in the ignored `saves` folder.
+- Settings remember fullscreen preference, dungeon lighting, scene finishing, and save-on-exit. Saves and settings are stored locally in the ignored saves folder.
 - The final victory screen appears only after the guardian falls; the main quest grants **50 bonus XP** once per run.
 - Main quest, **The Dungeon Purge**, tracked in the quest journal.
 - Meet the **Ashen Warden** near the starting chamber and press **E** to learn about the dungeon and current wave.
@@ -30,3 +31,9 @@ packaging
 - Press **J** during gameplay to open or close the quest journal; **Esc** closes the journal.
 - Surviving all four waves and defeating the Ashen Titan completes the main quest and grants **50 bonus XP** once per run.
 - Press **I** for inventory, **1–5** for hotbar slots, and **F11** or **Alt+Enter** to toggle fullscreen.
+
+## Development workflow
+
+Development changes are made on focused feature branches and merged through pull requests. GitHub Actions runs the full regression suite on Ubuntu and Windows. Test logs and summaries are uploaded for review.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, local test commands, branch conventions, and release packaging instructions.

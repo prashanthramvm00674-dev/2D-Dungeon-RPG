@@ -17,6 +17,9 @@ build/
 dist/
 *.spec
 
+# Generated test and release reports
+artifacts/
+
 # IDE settings
 .vscode/
 .idea/

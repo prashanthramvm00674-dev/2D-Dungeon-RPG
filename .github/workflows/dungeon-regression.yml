@@ -1,65 +1,59 @@
 name: Dungeon regression checks
-
 on:
   push:
-    branches: [main, feature/enemy-waves, feature/dungeon-quest, feature/ashen-warden-dialogue, feature/dungeon-boss-encounter, feature/polish-persistence]
+    branches:
+      - main
+      - "feature/**"
+      - "fix/**"
+      - "automation/**"
+      - "test/**"
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
-
 permissions:
   contents: read
-
+concurrency:
+  group: ${ github.workflow }}-${ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
-  dungeon-generation:
-    runs-on: ubuntu-latest
+  regression:
+    name: Regression (${ matrix.os }}, Python ${ matrix.python-version }})
+    runs-on: ${ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+        python-version:
+          - "3.13"
     env:
       SDL_VIDEODRIVER: dummy
       SDL_AUDIODRIVER: dummy
+      PYGAME_HIDE_SUPPORT_PROMPT: "1"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${ matrix.python-version }}
           cache: pip
           cache-dependency-path: requirements.txt
-
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
-
-      - name: Test dungeon generation and navigation
-        run: python tests/test_dungeon_generation.py
-
-      - name: Smoke-test graphics pipeline
-        run: python tests/test_visual_rendering.py
-
-      - name: Test scene post-processing
-        run: python tests/test_post_processing.py
-
-      - name: Test mouse coordinate normalization on scaled displays
-        run: python tests/test_mouse_coordinates.py
-
-      - name: Test inventory interactions and hotbar
-        run: python tests/test_inventory_ui.py
-
-      - name: Test dropped potion bottle rendering
-        run: python tests/test_loot_rendering.py
-
-      - name: Test four-wave and boss state machine
-        run: python tests/test_wave_manager.py
-
-      - name: Test Ashen Titan combat and rendering
-        run: python tests/test_boss_encounter.py
-
-      - name: Test save/load and persistent settings
-        run: python tests/test_persistence.py
-
-      - name: Test dungeon quest progression and reward
-        run: python tests/test_quest_manager.py
-
-      - name: Test Warden proximity and dialogue UI
-        run: python tests/test_npc_dialogue.py
-
-      - name: Test NPC interaction, pause menu, fullscreen, hotbar, inventory, and waves
-        run: python tests/test_game_ui_integration.py
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Compile source and tests
+        run: python -m compileall -q src tests
+      - name: Run complete regression suite
+        run: python tests/run_regression.py --timeout 240
+      - name: Upload regression reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-reports-${ matrix.os }}-py${ matrix.python-version }}
+          path: artifacts/test-reports/
+          if-no-files-found: warn
+          retention-days: 14
