@@ -7,7 +7,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: windows-release-${ github.ref }}
+  group: windows-release-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   build:
@@ -67,6 +67,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          name: ${ github.ref_name }}
+          name: ${{ github.ref_name }}
           generate_release_notes: true
           files: artifacts/release/2D-Dungeon-RPG-windows-x64.zip
