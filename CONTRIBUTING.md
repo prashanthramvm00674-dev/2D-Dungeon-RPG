@@ -42,7 +42,7 @@ The runner sets SDL's dummy video and audio drivers for headless test execution.
 
 GitHub Actions runs the regression suite on Python 3.13 on Ubuntu and Windows for pushes to supported development branches and for pull requests targeting main. The test runner discovers test_*.py scripts automatically, so newly added tests join CI without maintaining a second list.
 
-The Windows release workflow can be started manually from the Actions tab. Pushing a version tag such as v1.1.0 runs the Windows tests, builds a standalone folder with PyInstaller, packages it as a ZIP, and publishes that ZIP as a GitHub Release asset if all preceding steps pass.
+The Windows packaging workflow also builds a standalone ZIP on pull requests targeting main. The main regression workflow independently runs the full test suite on Ubuntu and Windows. Starting the packaging workflow manually, or pushing a version tag such as v1.1.0, runs the full regression suite before building. Version tags publish the tested ZIP as a GitHub Release asset.
 
 ## Change safety
 
